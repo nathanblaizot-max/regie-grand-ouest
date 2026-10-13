@@ -2,7 +2,7 @@
 (function () {
   var CONTACT = 'nathan.blaizot@gmail.com'; // adresse affichée pour « Demander une démo »
   var NOM = 'Loc en poche';
-  var SIGNATURE = 'par Sud Manche Locations';
+  var SIGNATURE = 'fait par Toutoune';
 
   var CSS = '' +
     '#web-landing{--l-bg:#F6F8FA;--l-surface:#fff;--l-ink:#0B2A3A;--l-muted:#4F6676;--l-line:#DDE6EC;--l-navy:#023047;--l-navy2:#0A4560;--l-gold:#D0BB63;--l-gold-ink:#1E2A10;--l-soft:#EEF3F6;' +
