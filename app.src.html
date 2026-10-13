@@ -510,7 +510,7 @@ function vDashboard(){
   h+='<div class="grid g2" style="margin-top:14px"><div class="card"><div class="sec-title">À livrer et à récupérer (7 jours)</div>';
   if(!ev.length)h+=empty('Rien de prévu','Aucune livraison ni récupération cette semaine.');
   ev.forEach(function(e){h+='<div class="list-row"><div><b>'+esc(e.d.titre||'Sans titre')+'</b><div class="small muted">'+esc(clientName(e.d.clientId))+(e.d.lieu?' · '+esc(e.d.lieu):'')+'</div></div><div style="text-align:right"><span class="chip '+(e.type==='À livrer'?'info':'sun')+'">'+e.type+'</span><div class="small muted">'+fmtD(e.date)+'</div></div><button class="btn btn-sm" data-action="open-dossier" data-id="'+e.d.id+'">Ouvrir</button></div>';});
-  h+='</div><div class="card"><div class="sec-title">À surveiller</div>';
+  h+='</div>';var hMain=h;h='<div class="card"><div class="sec-title">À surveiller</div>';
   var alerts=[];
   if(retard)alerts.push(['Factures en retard de paiement',retard+' facture(s) dépassent leur échéance.','documents']);
   if(aComp)alerts.push(['Quantités à renseigner',aComp+' article(s) du catalogue ont un stock par défaut de 1. Indiquez vos vraies quantités pour que les disponibilités soient justes.','materiel']);
@@ -521,15 +521,15 @@ function vDashboard(){
   if(!S.set.siret)alerts.push(['Informations légales incomplètes','Ajoutez le SIRET, l\'adresse et le régime de TVA pour vos devis et factures.','reglages']);
   if(!alerts.length)h+=empty('Tout est en ordre','Aucune alerte pour le moment.');
   alerts.forEach(function(a){h+='<div class="list-row"><div style="flex:1 1 240px"><b>'+esc(a[0])+'</b><div class="small muted">'+esc(a[1])+'</div></div><button class="btn btn-sm" data-action="nav" data-v="'+a[2]+'">Voir</button></div>';});
-  h+='</div></div>';
+  h+='</div>';var hSurv=h;h='';
   var tAf=S.taches.filter(function(x){return x.statut!=='fait';}).sort(function(a,b){var ea=a.echeance||'9999',eb=b.echeance||'9999';return ea<eb?-1:ea>eb?1:0;});
-  h+='<div class="card" style="margin-top:14px"><div class="sec-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span>Tâches à faire'+(tAf.length?' ('+tAf.length+')':'')+'</span><span style="display:flex;gap:6px"><button class="btn btn-sm" data-action="new-tache">'+ic('plus')+'Tâche</button><button class="btn btn-sm" data-action="nav" data-v="taches">Tout voir</button></span></div>';
+  h+='<div class="card"><div class="sec-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="margin-right:auto">Tâches à faire'+(tAf.length?' ('+tAf.length+')':'')+'</span><span style="display:flex;gap:6px"><button class="btn btn-sm" data-action="new-tache">'+ic('plus')+'Tâche</button><button class="btn btn-sm" data-action="nav" data-v="taches">Tout voir</button></span></div>';
   if(!tAf.length)h+=empty('Rien à faire','Aucune tâche en attente.');
   tAf.slice(0,6).forEach(function(x){var late=x.echeance&&x.echeance<t;h+='<div class="list-row row-click" style="cursor:pointer" data-action="edit-tache" data-id="'+x.id+'"><button class="icon-btn" data-action="toggle-tache" data-id="'+x.id+'" aria-label="Marquer comme faite">'+ic('check')+'</button><div style="flex:1 1 220px;min-width:0"><b>'+esc(x.titre)+'</b>'+(x.notes?'<div class="small muted">'+esc(x.notes)+'</div>':'')+'</div><div>'+(x.echeance?'<span class="chip '+(late?'bad':'')+'">'+(late?'En retard · ':'')+fmtD(x.echeance)+'</span>':'<span class="small muted">Sans date</span>')+'</div></div>';});
   if(tAf.length>6)h+='<div class="small muted" style="padding:8px 4px">+ '+(tAf.length-6)+' autre(s) tâche(s)</div>';
   if(tSug)h+='<div class="list-row"><div style="flex:1 1 240px"><b>Rappels automatiques</b><div class="small muted">'+tSug+' relance(s) de devis ou de factures à traiter.</div></div><button class="btn btn-sm" data-action="nav" data-v="taches">Voir</button></div>';
   h+='</div>';
-  return h;
+  return hMain+h+'</div><div style="margin-top:14px">'+hSurv+'</div>';
 }
 
 /* --- Planning --- */
