@@ -1,0 +1,15 @@
+{
+  "name": "regie-grand-ouest",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Gestion de location de matériel événementiel (devis, factures, planning, caisse).",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node test/run.mjs"
+  },
+  "dependencies": {
+    "@netlify/database": "latest",
+    "@netlify/functions": "latest"
+  }
+}
