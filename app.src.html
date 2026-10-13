@@ -504,9 +504,9 @@ function vDashboard(){
   var h=head('Tableau de bord',fmtD(t)+' · '+S.dossiers.filter(function(d){return ACTIFS.indexOf(d.statut)>=0;}).length+' location(s) en cours ou à venir','<button class="btn btn-primary" data-action="new-dossier">'+ic('plus')+'Nouvelle location</button>');
   h+='<div class="grid g4">'
    +'<div class="card kpi kpi-link" role="button" tabindex="0" data-action="kpi-doc" data-t="facture" data-st="emise"><div class="kpi-l">À encaisser</div><div class="kpi-v">'+money(aEnc)+'</div><div class="kpi-s">'+nbEnc+' facture(s)'+(retard?' · <b style="color:var(--bad)">'+retard+' en retard</b>':'')+'</div></div>'
-   +'<div class="card kpi"><div class="kpi-l">Facturé ce mois (HT)</div><div class="kpi-v">'+money(caMois)+'</div><div class="kpi-s">Hors factures annulées</div></div>'
+   +'<div class="card kpi kpi-link" role="button" tabindex="0" data-action="kpi-doc" data-t="facture" data-st=""><div class="kpi-l">Facturé ce mois (HT)</div><div class="kpi-v">'+money(caMois)+'</div><div class="kpi-s">Hors factures annulées</div></div>'
    +'<div class="card kpi kpi-link" role="button" tabindex="0" data-action="kpi-doc" data-t="devis" data-st="attente"><div class="kpi-l">Devis en attente</div><div class="kpi-v">'+devis.length+'</div><div class="kpi-s">'+money(devisMt)+' TTC</div></div>'
-   +'<div class="card kpi"><div class="kpi-l">Matériel dehors aujourd\'hui</div><div class="kpi-v">'+dehors.length+'</div><div class="kpi-s">location(s) en cours</div></div></div>';
+   +'<div class="card kpi kpi-link" role="button" tabindex="0" data-action="kpi-dehors"><div class="kpi-l">Matériel dehors aujourd\'hui</div><div class="kpi-v">'+dehors.length+'</div><div class="kpi-s">location(s) en cours</div></div></div>';
   h+='<div class="grid g2" style="margin-top:14px"><div class="card"><div class="sec-title">À livrer et à récupérer (7 jours)</div>';
   if(!ev.length)h+=empty('Rien de prévu','Aucune livraison ni récupération cette semaine.');
   ev.forEach(function(e){h+='<div class="list-row"><div><b>'+esc(e.d.titre||'Sans titre')+'</b><div class="small muted">'+esc(clientName(e.d.clientId))+(e.d.lieu?' · '+esc(e.d.lieu):'')+'</div></div><div style="text-align:right"><span class="chip '+(e.type==='À livrer'?'info':'sun')+'">'+e.type+'</span><div class="small muted">'+fmtD(e.date)+'</div></div><button class="btn btn-sm" data-action="open-dossier" data-id="'+e.d.id+'">Ouvrir</button></div>';});
@@ -572,6 +572,7 @@ function dossierRow(d){
 function vDossiers(){
   var h=head('Locations','Chaque location regroupe le client, les dates, le matériel et les documents.','<button class="btn btn-primary" data-action="new-dossier">'+ic('plus')+'Nouvelle location</button>');
   h+='<div class="toolbar"><div class="grow"><input id="f-q" type="search" placeholder="Rechercher un titre, un client, un lieu" value="'+esc(S.f.q)+'" data-filter="q" aria-label="Rechercher"></div><div><select id="f-st" data-filter="statut" aria-label="Statut"><option value="">Tous les statuts</option>'+Object.keys(ST_DOSSIER).map(function(k){return '<option value="'+k+'"'+(S.f.statut===k?' selected':'')+'>'+ST_DOSSIER[k][0]+'</option>';}).join('')+'</select></div></div>';
+  if(S.f.dehors)h+='<div class="toolbar"><span class="chip info">Matériel dehors aujourd\'hui</span><button class="btn" data-action="kpi-dehors-off">Voir toutes les locations</button></div>';
   h+='<div class="toolbar">'+quiBar()+'</div><div class="card" id="list">'+dossierList()+'</div>';
   return h;
 }
@@ -579,6 +580,7 @@ function dossierList(){
   var q=S.f.q.toLowerCase();
   var l=S.dossiers.filter(function(d){
     if(S.f.statut&&d.statut!==S.f.statut)return false;
+    if(S.f.dehors&&!(d.statut!=='option'&&activeDay(d,today())))return false;
     if(!quiOk(d))return false;
     if(!q)return true;
     return (d.titre+' '+d.lieu+' '+clientName(d.clientId)).toLowerCase().indexOf(q)>=0;
@@ -1486,7 +1488,7 @@ var A={
   'mail-new':function(){if(!S.mcp){toast('Gmail n\'est pas disponible dans cette vue.');return;}openMailNew();},
   'mail-save':saveMailNew,
   qui:function(t){S.f.qui=t.dataset.q;render();},
-  nav:function(t){S.view=t.dataset.v;if(S.view==='caisse')S.caisseId=null;S.f.q='';S.f.cat='';S.f.statut='';S.f.aCompleter=false;try{localStorage.setItem('regie-view',S.view);}catch(e){}if($('#modal-root').innerHTML)closeModal();render();window.scrollTo(0,0);},
+  nav:function(t){S.view=t.dataset.v;if(S.view==='caisse')S.caisseId=null;S.f.q='';S.f.cat='';S.f.statut='';S.f.aCompleter=false;S.f.dehors=false;try{localStorage.setItem('regie-view',S.view);}catch(e){}if($('#modal-root').innerHTML)closeModal();render();window.scrollTo(0,0);},
   close:closeModal,
   bg:function(t,e){if(e.target===t)closeModal();},
   'sel-day':function(t){S.selDay=t.dataset.d;render();},
@@ -1658,6 +1660,8 @@ var A={
   'edit-materiel':function(t){openMateriel(t.dataset.id);},
   'save-materiel':saveMateriel,
   'del-materiel':function(){if(S.confirm!=='materiel'){S.confirm='materiel';openMateriel(S.draft.id);return;}S.db.collection('materiel').doc(S.draft.id).delete().then(function(){toast('Article supprimé');closeModal();}).catch(dbErr);},
+  'kpi-dehors':function(){S.view='dossiers';S.f.q='';S.f.cat='';S.f.statut='';S.f.aCompleter=false;S.f.dehors=true;try{localStorage.setItem('regie-view',S.view);}catch(e){}render();window.scrollTo(0,0);},
+  'kpi-dehors-off':function(){S.f.dehors=false;render();},
   'kpi-doc':function(t){S.view='documents';S.f.dtype=t.dataset.t;S.f.statut=t.dataset.st;S.f.q='';try{localStorage.setItem('regie-view',S.view);}catch(e){}render();window.scrollTo(0,0);},
   'open-doc':function(t){S.confirm='';openDoc(t.dataset.id);},
   pdf:downloadPdf,
