@@ -1083,7 +1083,7 @@ function openDossier(id,date){
   var d=id?byId(S.dossiers,id):null;
   S.modal='dossier';
   S.draft=d?JSON.parse(JSON.stringify(d)):{clientId:'',titre:'',lieu:'',dateDebut:date||today(),dateFin:date||today(),statut:'option',lignes:[],notes:'',assigne:''};
-  S.draft.nc={nom:'',tel:'',email:''};PICK.q='';PICK.cat='';
+  S.draft.nc=NC0();PICK.q='';PICK.cat='';
   if(!S.draft.km){var kl=(S.draft.lignes||[]).filter(function(l){return l.unite==='km';})[0];if(kl)S.draft.km=kl.qte;}
   renderDossierModal();
 }
@@ -1137,6 +1137,8 @@ function pickerHtml(){
    +'<div class="pick-cats"><button class="chip-btn'+(PICK.cat?'':' on')+'" data-action="pick-cat" data-c="">Tout</button>'+cats.map(function(c){return '<button class="chip-btn'+(PICK.cat===c?' on':'')+'" data-action="pick-cat" data-c="'+esc(c)+'">'+esc(c)+'</button>';}).join('')+'</div>'
    +'<div class="pick-res" id="pick-res"></div></div>';
 }
+function NC0(){return {nom:'',type:'particulier',tel:'',email:'',adresse:'',siret:''};}
+function ncData(nc){return {nom:String(nc.nom||'').trim(),type:nc.type==='pro'?'pro':'particulier',tel:String(nc.tel||'').trim(),email:String(nc.email||'').trim(),siret:String(nc.siret||'').trim(),adresse:String(nc.adresse||'').trim(),notes:''};}
 function pickResults(){
   var d=S.draft,q=nz(PICK.q).trim();
   if(!q&&!PICK.cat)return '<div class="small muted" style="padding:6px 2px">Tapez un nom ou choisissez une catégorie, puis touchez un article pour l\'ajouter.</div>';
@@ -1189,7 +1191,7 @@ function renderDossierModal(){
    +'<section class="dsec"><h3><span class="dn">1</span>Client</h3><div class="form-grid">'
    +'<div class="field"><label for="d-client">Client</label><input id="d-client" data-clq="1" autocomplete="off" placeholder="'+(d.clientId==='__new'?'Nouveau client (voir ci-dessous)':'Tapez pour chercher un client…')+'" value="'+esc((d.clientId&&d.clientId!=='__new'?(byId(S.clients,d.clientId)?clientName(d.clientId):(d.cs&&d.cs.nom)||clientName(d.clientId)):''))+'"><div class="pick-res" id="cl-res" style="max-height:38vh"></div></div>'
    +'<div class="field"><label for="d-titre">Titre de l\'événement <span class="muted">(facultatif)</span></label><input id="d-titre" data-field="titre" value="'+esc(d.titre)+'" placeholder="Facultatif : sinon, le matériel loué"></div></div>'
-   +(d.clientId==='__new'?'<div class="form-grid card card-pad" style="background:var(--surface-2)"><div class="field"><label for="nc-nom">Nom du nouveau client</label><input id="nc-nom" data-nc="nom" value="'+esc(d.nc.nom)+'"></div><div class="field"><label for="nc-tel">Téléphone</label><input id="nc-tel" data-nc="tel" value="'+esc(d.nc.tel)+'"></div><div class="field"><label for="nc-email">E-mail</label><input id="nc-email" data-nc="email" value="'+esc(d.nc.email)+'"></div><div class="field" style="align-self:end"><button class="btn btn-primary" type="button" data-action="add-nc">'+ic('plus')+'Ajouter le client</button></div></div>':'')
+   +(d.clientId==='__new'?'<div class="form-grid card card-pad" style="background:var(--surface-2)"><div class="field"><label for="nc-nom">Nom du nouveau client</label><input id="nc-nom" data-nc="nom" value="'+esc(d.nc.nom)+'"></div><div class="field"><label for="nc-tel">Téléphone</label><input id="nc-tel" data-nc="tel" value="'+esc(d.nc.tel)+'"></div><div class="field"><label for="nc-email">E-mail</label><input id="nc-email" data-nc="email" value="'+esc(d.nc.email)+'"></div><div class="field"><label for="nc-type">Type de client</label><select id="nc-type" data-nc="type"><option value="particulier"'+(d.nc.type!=='pro'?' selected':'')+'>Particulier</option><option value="pro"'+(d.nc.type==='pro'?' selected':'')+'>Professionnel</option></select></div><div class="field"><label for="nc-siret">SIRET (professionnel)</label><input id="nc-siret" data-nc="siret" value="'+esc(d.nc.siret||'')+'"></div><div class="field" style="grid-column:1/-1"><label for="nc-adresse">Adresse de facturation</label><textarea id="nc-adresse" data-nc="adresse" rows="2" placeholder="Rue, code postal, ville">'+esc(d.nc.adresse||'')+'</textarea></div><div class="field" style="align-self:end"><button class="btn btn-primary" type="button" data-action="add-nc">'+ic('plus')+'Ajouter le client</button></div></div>':'')
    +'</section>'
    +'<section class="dsec"><h3><span class="dn">2</span>Dates et lieu</h3><div class="form-grid">'
    +'<div class="field"><label for="d-deb">Début (livraison)</label><input id="d-deb" type="date" data-field="dateDebut" value="'+esc(d.dateDebut)+'"></div>'
@@ -1253,7 +1255,7 @@ function persistDossier(cb){
   if(d.clientId==='__new'){
     if(!d.nc.nom.trim()){toast('Indiquez le nom du nouveau client.');return;}
     var cid=uid('clients');
-    S.db.collection('clients').doc(cid).set({nom:d.nc.nom.trim(),type:'particulier',tel:d.nc.tel.trim(),email:d.nc.email.trim(),siret:'',adresse:'',notes:''}).then(function(){write(cid);}).catch(dbErr);
+    S.draft.cs=ncData(d.nc);S.db.collection('clients').doc(cid).set(S.draft.cs).then(function(){write(cid);}).catch(dbErr);
   }else write(d.clientId);
 }
 function makeDocument(type){
@@ -1684,8 +1686,8 @@ var A={
   'add-nc':function(){
     var d=S.draft,nc=d.nc||{};
     if(!String(nc.nom||'').trim()){toast('Indiquez le nom du nouveau client.');return;}
-    var cid=uid('clients'),o={nom:nc.nom.trim(),type:'particulier',tel:String(nc.tel||'').trim(),email:String(nc.email||'').trim(),siret:'',adresse:'',notes:''};
-    S.db.collection('clients').doc(cid).set(o).then(function(){d.clientId=cid;d.cs=o;d.nc={nom:'',tel:'',email:''};toast('Client ajouté');renderDossierModal();}).catch(dbErr);},
+    var cid=uid('clients'),o=ncData(nc);
+    S.db.collection('clients').doc(cid).set(o).then(function(){d.clientId=cid;d.cs=o;d.nc=NC0();toast('Client ajouté');renderDossierModal();}).catch(dbErr);},
   'pick-client':function(t){
     var el=document.getElementById('d-client'),typed=el?el.value.trim():'';
     if(t.dataset.id==='__new'){S.draft.clientId='__new';if(typed&&!S.draft.nc.nom)S.draft.nc.nom=typed;}
