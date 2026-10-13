@@ -533,6 +533,12 @@ function vDashboard(){
 }
 
 /* --- Planning --- */
+function planPick(y,mo,label){
+  var mois=[];for(var i=0;i<12;i++)mois.push(new Date(2024,i,1).toLocaleDateString('fr-FR',{month:'long'}));
+  var ys=[];for(var a=Math.min(y,new Date().getFullYear())-3;a<=Math.max(y,new Date().getFullYear())+5;a++)ys.push(a);
+  return '<select data-plan="m" aria-label="Mois (affiché : '+esc(label)+')" style="text-transform:capitalize;min-width:0;width:auto">'+mois.map(function(n,i){return '<option value="'+i+'"'+(i===mo?' selected':'')+'>'+esc(n)+'</option>';}).join('')+'</select>'
+   +'<select data-plan="y" aria-label="Année" style="min-width:0;width:auto">'+ys.map(function(a){return '<option value="'+a+'"'+(a===y?' selected':'')+'>'+a+'</option>';}).join('')+'</select>';
+}
 function vPlanning(){
   var m=S.month,y=m.getFullYear(),mo=m.getMonth();
   var label=m.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
@@ -547,7 +553,7 @@ function vPlanning(){
   }
   var legend='<div class="cal-legend"><span><i class="lg ps-ok"></i>Payé et récupéré</span><span><i class="lg ps-pay"></i>Payé, pas encore récupéré</span><span><i class="lg ps-rec"></i>Récupéré, pas payé</span><span><i class="lg ps-no"></i>Pas payé, pas récupéré</span></div>';
   var jours=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(function(j){return '<div class="cal-h">'+j+'</div>';}).join('');
-  var h=head('Planning','Locations par jour (devis, confirmées, livrées et terminées)','<button class="icon-btn" data-action="month" data-n="-1" aria-label="Mois précédent">'+ic('l')+'</button><b style="min-width:150px;text-align:center;text-transform:capitalize">'+esc(label)+'</b><button class="icon-btn" data-action="month" data-n="1" aria-label="Mois suivant">'+ic('r')+'</button><button class="btn btn-sm" data-action="month" data-n="0">Aujourd\'hui</button>');
+  var h=head('Planning','Locations par jour (devis, confirmées, livrées et terminées)','<button class="icon-btn" data-action="month" data-n="-1" aria-label="Mois précédent">'+ic('l')+'</button>'+planPick(y,mo,label)+'<button class="icon-btn" data-action="month" data-n="1" aria-label="Mois suivant">'+ic('r')+'</button><button class="btn btn-sm" data-action="month" data-n="0">Aujourd\'hui</button>');
   h+=legend+'<div class="card" style="overflow:hidden"><div class="cal">'+jours+cells+'</div></div>';
   if(S.selDay){
     var list=S.dossiers.filter(function(x){return planDay(x,S.selDay);});
@@ -1731,6 +1737,7 @@ document.addEventListener('input',function(e){
 });
 document.addEventListener('change',function(e){
   var t=e.target;
+  if(t.dataset&&t.dataset.plan){var pm=document.querySelector('[data-plan="m"]'),py=document.querySelector('[data-plan="y"]');S.month=new Date(+py.value,+pm.value,1);render();return;}
   if(t.id==='s-logo-file'){if(t.files&&t.files[0])readLogo(t.files[0]);return;}
   if(t.dataset&&t.dataset.col){var o1={};o1[t.dataset.col]=t.value;S.set=Object.assign({},S.set,o1);applyTheme();S.db.doc('config/societe').update(o1).then(function(){toast('Couleur enregistrée');}).catch(dbErr);return;}
   if(t.dataset.filter&&t.tagName==='SELECT'){S.f[t.dataset.filter]=t.value;if(t.dataset.filter==='dtype'||t.dataset.filter==='statut'||t.dataset.filter==='cat'){var list=$('#list');if(list){if(S.view==='dossiers')list.innerHTML=dossierList();else if(S.view==='documents')list.innerHTML=docList();else if(S.view==='materiel')list.innerHTML=materielList();else if(S.view==='taches')list.innerHTML=tacheList();else if(S.view==='entretien')list.innerHTML=entretienList();}}return;}

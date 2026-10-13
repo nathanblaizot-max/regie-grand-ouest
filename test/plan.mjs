@@ -1,0 +1,30 @@
+import { createRequire } from 'node:module';
+import assert from 'node:assert/strict';
+import { startServer } from './dev-server.mjs';
+const require = createRequire('/opt/node22/lib/node_modules/');
+const { chromium } = require('playwright');
+const { server, port } = await startServer();
+const browser = await chromium.launch({ args: ['--no-sandbox'] });
+const errs = [];
+try {
+  const page = await (await browser.newContext({ viewport: { width: 420, height: 800 } })).newPage();
+  page.on('pageerror', e => errs.push(e.message));
+  await page.goto('http://127.0.0.1:' + port + '/'); await page.waitForSelector('#web-form');
+  await page.fill('#w-code', 'TESTCODE'); await page.fill('#w-name', 'N'); await page.fill('#w-email', 'n@t.fr'); await page.fill('#w-pass', 'motdepasse1');
+  await page.click('#web-form button'); await page.waitForSelector('nav.nav button');
+  await page.click('nav.nav button:has-text("Planning")');
+  await page.waitForSelector('[data-plan="m"]');
+  await page.selectOption('[data-plan="y"]', String(new Date().getFullYear() + 1));
+  await page.selectOption('[data-plan="m"]', '2');
+  assert.equal(await page.inputValue('[data-plan="m"]'), '2');
+  assert.equal(await page.inputValue('[data-plan="y"]'), String(new Date().getFullYear() + 1));
+  await page.click('[data-action="month"][data-n="1"]');
+  assert.equal(await page.inputValue('[data-plan="m"]'), '3');
+  await page.click('[data-action="month"][data-n="0"]');
+  assert.equal(await page.inputValue('[data-plan="m"]'), String(new Date().getMonth()));
+  const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  console.log('Débordement horizontal (px):', over);
+  await page.screenshot({ path: process.argv[2] || '/tmp/plan.png' });
+  assert.deepEqual(errs, []);
+  console.log('Choix mois et année : OK');
+} catch (e) { console.error('ÉCHEC', e, errs); process.exitCode = 1; } finally { await browser.close(); server.close(); }
