@@ -1187,9 +1187,9 @@ function renderDossierModal(){
   var bg0=document.querySelector('.modal-bg'),sc0=bg0?bg0.scrollTop:0;
   var h=mhead(isNew?'Nouvelle location et devis':'Location')+'<div class="modal-b">'
    +'<section class="dsec"><h3><span class="dn">1</span>Client</h3><div class="form-grid">'
-   +'<div class="field"><label for="d-client">Client</label><input id="d-client" data-clq="1" autocomplete="off" placeholder="'+(d.clientId==='__new'?'Nouveau client (voir ci-dessous)':'Tapez pour chercher un client…')+'" value="'+esc((d.clientId&&d.clientId!=='__new'?clientName(d.clientId):''))+'"><div class="pick-res" id="cl-res" style="max-height:38vh"></div></div>'
+   +'<div class="field"><label for="d-client">Client</label><input id="d-client" data-clq="1" autocomplete="off" placeholder="'+(d.clientId==='__new'?'Nouveau client (voir ci-dessous)':'Tapez pour chercher un client…')+'" value="'+esc((d.clientId&&d.clientId!=='__new'?(byId(S.clients,d.clientId)?clientName(d.clientId):(d.cs&&d.cs.nom)||clientName(d.clientId)):''))+'"><div class="pick-res" id="cl-res" style="max-height:38vh"></div></div>'
    +'<div class="field"><label for="d-titre">Titre de l\'événement <span class="muted">(facultatif)</span></label><input id="d-titre" data-field="titre" value="'+esc(d.titre)+'" placeholder="Facultatif : sinon, le matériel loué"></div></div>'
-   +(d.clientId==='__new'?'<div class="form-grid card card-pad" style="background:var(--surface-2)"><div class="field"><label for="nc-nom">Nom du nouveau client</label><input id="nc-nom" data-nc="nom" value="'+esc(d.nc.nom)+'"></div><div class="field"><label for="nc-tel">Téléphone</label><input id="nc-tel" data-nc="tel" value="'+esc(d.nc.tel)+'"></div><div class="field"><label for="nc-email">E-mail</label><input id="nc-email" data-nc="email" value="'+esc(d.nc.email)+'"></div></div>':'')
+   +(d.clientId==='__new'?'<div class="form-grid card card-pad" style="background:var(--surface-2)"><div class="field"><label for="nc-nom">Nom du nouveau client</label><input id="nc-nom" data-nc="nom" value="'+esc(d.nc.nom)+'"></div><div class="field"><label for="nc-tel">Téléphone</label><input id="nc-tel" data-nc="tel" value="'+esc(d.nc.tel)+'"></div><div class="field"><label for="nc-email">E-mail</label><input id="nc-email" data-nc="email" value="'+esc(d.nc.email)+'"></div><div class="field" style="align-self:end"><button class="btn btn-primary" type="button" data-action="add-nc">'+ic('plus')+'Ajouter le client</button></div></div>':'')
    +'</section>'
    +'<section class="dsec"><h3><span class="dn">2</span>Dates et lieu</h3><div class="form-grid">'
    +'<div class="field"><label for="d-deb">Début (livraison)</label><input id="d-deb" type="date" data-field="dateDebut" value="'+esc(d.dateDebut)+'"></div>'
@@ -1681,6 +1681,11 @@ var A={
     S.db.collection('dossiers').doc(d.id).update({statut:v?'terminee':'livree'}).catch(dbErr);
     toast(v?'Marqué récupéré':'Marqué pas récupéré');
   },
+  'add-nc':function(){
+    var d=S.draft,nc=d.nc||{};
+    if(!String(nc.nom||'').trim()){toast('Indiquez le nom du nouveau client.');return;}
+    var cid=uid('clients'),o={nom:nc.nom.trim(),type:'particulier',tel:String(nc.tel||'').trim(),email:String(nc.email||'').trim(),siret:'',adresse:'',notes:''};
+    S.db.collection('clients').doc(cid).set(o).then(function(){d.clientId=cid;d.cs=o;d.nc={nom:'',tel:'',email:''};toast('Client ajouté');renderDossierModal();}).catch(dbErr);},
   'pick-client':function(t){
     var el=document.getElementById('d-client'),typed=el?el.value.trim():'';
     if(t.dataset.id==='__new'){S.draft.clientId='__new';if(typed&&!S.draft.nc.nom)S.draft.nc.nom=typed;}
