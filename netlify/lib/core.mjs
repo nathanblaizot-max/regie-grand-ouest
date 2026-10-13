@@ -94,6 +94,31 @@ function tooMany(ip) {
   return arr.length >= 10;
 }
 
+
+const pubHits = new Map();
+function tooManyPub(ip) { const now = Date.now(), a = (pubHits.get(ip) || []).filter((t) => now - t < 600000); pubHits.set(ip, a); return a.length >= 20; }
+function pubFails(ip) { (pubHits.get(ip) || []).push(Date.now()); }
+const todayParis = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' });
+async function findByToken(db, t) {
+  const token = String(t || '');
+  if (!/^[A-Za-z0-9_-]{20,64}$/.test(token)) return null;
+  const rows = await db.sql`SELECT tenant, id, data FROM docs WHERE col = 'documents' AND deleted = false AND data->>'signToken' = ${token}`;
+  return rows[0] || null;
+}
+function publicDevis(d) {
+  const so = d.societeSnap || {};
+  return {
+    type: d.type, numero: d.numero, titre: d.titre || '', statut: d.statut, lieu: d.lieu || '',
+    dateDebut: d.dateDebut || '', dateFin: d.dateFin || '', dateValidite: d.dateValidite || '',
+    expire: !!(d.dateValidite && d.dateValidite < todayParis()),
+    client: (d.clientSnap && d.clientSnap.nom) || '',
+    societe: { nom: so.nom || '', adresse: so.adresse || '', tel: so.tel || '', email: so.email || '', siret: so.siret || '', conditions: so.conditions || '', cgv: so.cgv || '' },
+    lignes: (d.lignes || []).map((l) => ({ designation: l.designation, qte: l.qte, puHT: l.puHT, tva: l.tva, unite: l.unite || '' })),
+    totaux: d.totaux || {}, regimeTva: d.regimeTva || '', acomptePct: d.acomptePct || 0,
+    signe: !!d.signature, dateSignature: d.dateSignature || '', signataire: d.signataire || '',
+  };
+}
+
 export async function handle(req, db, opts = {}) {
   const url = new URL(req.url);
   const path = url.pathname.replace(/^\/api\/?/, '').replace(/\/$/, '');
@@ -136,6 +161,31 @@ export async function handle(req, db, opts = {}) {
       return J({ user: pub(u) }, 200, { 'set-cookie': await startSession(db, u) });
     }
     if (path === 'logout' && method === 'POST') return J({ ok: true }, 200, { 'set-cookie': cookieHeader('', 0) });
+
+    // ---- Signature en ligne d'un devis par le client (lien secret, sans compte)
+    if (path === 'public/devis' && method === 'GET') {
+      if (tooManyPub(ip)) return J({ error: 'trop-de-tentatives' }, 429);
+      const found = await findByToken(db, url.searchParams.get('t'));
+      if (!found) { pubFails(ip); await wait(300); return J({ error: 'introuvable' }, 404); }
+      return J({ devis: publicDevis(found.data) });
+    }
+    if (path === 'public/sign' && method === 'POST') {
+      if (tooManyPub(ip)) return J({ error: 'trop-de-tentatives' }, 429);
+      const b = await body(req);
+      const found = await findByToken(db, b.t);
+      if (!found) { pubFails(ip); await wait(300); return J({ error: 'introuvable' }, 404); }
+      const d = found.data;
+      if (d.type !== 'devis' || ['refuse', 'annule'].includes(d.statut)) return J({ error: 'indisponible' }, 409);
+      if (d.signature) return J({ error: 'deja-signe' }, 409);
+      if (d.dateValidite && d.dateValidite < todayParis()) return J({ error: 'expire' }, 409);
+      const nom = String(b.nom || '').trim().slice(0, 80);
+      const img = String(b.img || '');
+      if (nom.length < 2) return J({ error: 'nom' }, 400);
+      if (!/^data:image\/png;base64,[A-Za-z0-9+\/=]+$/.test(img) || img.length > 250000) return J({ error: 'signature' }, 400);
+      const patch = JSON.stringify({ statut: 'accepte', signature: img, signataire: nom, dateSignature: todayParis(), signeEnLigne: true, signeLe: new Date().toISOString(), signeIp: ip });
+      await db.sql`UPDATE docs SET data = data || ${patch}::jsonb, seq = nextval('docs_seq') WHERE tenant = ${found.tenant} AND col = 'documents' AND id = ${found.id}`;
+      return J({ ok: true });
+    }
 
     // ---- Avec session
     const me = await currentUser(db, req);

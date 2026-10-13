@@ -18,7 +18,8 @@ export function startServer(port = 0) {
       const headers = {}; out.headers.forEach((v, k) => (headers[k] = v));
       res.writeHead(out.status, headers); res.end(Buffer.from(await out.arrayBuffer())); return;
     }
-    const file = path.join(pub, req.url === '/' ? 'index.html' : req.url.split('?')[0]);
+    let file = path.join(pub, req.url === '/' ? 'index.html' : req.url.split('?')[0]);
+    if (!fs.existsSync(file) && fs.existsSync(file + '.html')) file += '.html'; // comme les URLs propres de Netlify
     if (!file.startsWith(pub) || !fs.existsSync(file)) { res.writeHead(404); res.end('404'); return; }
     res.writeHead(200, { 'content-type': types[path.extname(file)] || 'application/octet-stream' }); res.end(fs.readFileSync(file));
   });

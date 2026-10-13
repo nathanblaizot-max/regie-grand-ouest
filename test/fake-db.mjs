@@ -26,6 +26,8 @@ export function makeFakeDb() {
       return [...docs.values()].filter((d) => d.tenant === tenant && d.seq > since).sort((a, b) => a.seq - b.seq).slice(0, limit).map((d) => ({ ...d, seq: String(d.seq) }));
     }
     if (t.startsWith("SELECT coalesce(max(seq), 0)::text AS m FROM docs")) return [{ m: String(Math.max(0, ...[...docs.values()].filter((d) => d.tenant === v[0]).map((d) => d.seq))) }];
+    if (t.startsWith("SELECT tenant, id, data FROM docs WHERE col = 'documents'")) return [...docs.values()].filter((d) => d.col === 'documents' && !d.deleted && d.data.signToken === v[0]);
+    if (t.startsWith("UPDATE docs SET data = data ||")) { const [patch, tenant, id] = v, key = tenant + '|documents|' + id, ex = docs.get(key); docs.set(key, { ...ex, data: { ...ex.data, ...JSON.parse(patch) }, seq: ++seq }); return []; }
     if (t.startsWith("INSERT INTO docs")) {
       const [tenant, col, id] = v, key = tenant + '|' + col + '|' + id, ex = docs.get(key);
       let op = 'delete'; if (t.includes("docs.deleted THEN")) op = 'update'; else if (t.includes("deleted = false, seq")) op = 'set';

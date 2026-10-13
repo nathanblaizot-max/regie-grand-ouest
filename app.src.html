@@ -176,6 +176,7 @@ tr.row-click:hover td{background:var(--surface-2)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:600;z-index:80;max-width:calc(100% - 32px)}
 .banner{border-radius:10px;padding:12px 14px;background:var(--warn-soft);color:var(--warn);font-weight:600;margin-bottom:14px}
 .stock-in{width:78px;text-align:right}
+.cal-d.conf{box-shadow:inset 0 0 0 2px var(--bad)}
 @media (max-width:900px){
   .shell{grid-template-columns:minmax(0,1fr)}
   .side{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line);padding:12px 12px 6px;gap:8px;top:auto}
@@ -258,7 +259,7 @@ var DEFAULT_SET={
   nom:'Grand Ouest Locations', adresse:'', tel:'', email:'', siret:'', tvaNumero:'', forme:'', capital:'', rcsVille:'', tvaDebits:'non',
   regimeTva:'applicable', tvaDefaut:20, prixCatalogue:'TTC', tarifKm:0.75, acomptePct:30, delaiPaiement:30, validiteDevis:30,
   penalites:"En cas de retard de paiement, des pénalités de retard sont exigibles dès le lendemain de la date d'échéance, au taux de trois fois le taux d'intérêt légal, ainsi qu'une indemnité forfaitaire de recouvrement de 40 € pour les clients professionnels.",
-  conditions:'', rib:''
+  conditions:'', cgv:'', rib:''
 };
 var ST_DOSSIER={option:['Devis','sun'],confirmee:['Confirmée','info'],livree:['Livrée','ok'],terminee:['Terminée',''],annulee:['Annulée','bad']};
 var ACTIFS=['option','confirmee','livree'];
@@ -333,7 +334,7 @@ function legalLines(soc){
 function sirenOf(cl){var d=String((cl&&cl.siret)||'').replace(/\D/g,'');return d.length>=9?d.slice(0,9).replace(/(\d{3})(?=\d)/g,'$1 '):'';}
 function natureOp(d){return (d.lignes||[]).some(function(l){return /consommable|vente/i.test(l.designation||'');})?'Opération mixte (prestation de services et livraison de biens)':'Prestation de services (location de matériel)';}
 function mentionsFacture(d,soc){var m=['Nature de l\'opération : '+natureOp(d)+'.','Pas d\'escompte pour paiement anticipé.'];if(legalOf(soc,'tvaDebits')==='oui')m.push('TVA acquittée d\'après les débits.');return m;}
-function socSnap(){return {nom:S.set.nom,adresse:S.set.adresse,tel:S.set.tel,email:S.set.email,siret:S.set.siret,siren:S.set.siren||'',tvaNumero:S.set.tvaNumero,forme:S.set.forme||'',capital:S.set.capital||'',rcsVille:S.set.rcsVille||'',tvaDebits:S.set.tvaDebits||'non',penalites:S.set.penalites,conditions:S.set.conditions,rib:S.set.rib};}
+function socSnap(){return {nom:S.set.nom,adresse:S.set.adresse,tel:S.set.tel,email:S.set.email,siret:S.set.siret,siren:S.set.siren||'',tvaNumero:S.set.tvaNumero,forme:S.set.forme||'',capital:S.set.capital||'',rcsVille:S.set.rcsVille||'',tvaDebits:S.set.tvaDebits||'non',penalites:S.set.penalites,conditions:S.set.conditions,cgv:S.set.cgv||'',rib:S.set.rib};}
 function chkSiren(cid){var c=byId(S.clients,cid);if(c&&c.type==='pro'&&!sirenOf(c))setTimeout(function(){toast('Client professionnel : renseignez son SIRET (le SIREN est obligatoire sur la facture).');},1800);}
 function isPaid(d){
   if(typeof d.paye==='boolean')return d.paye;
@@ -367,6 +368,28 @@ function reservedMax(mid,start,end,excl){
     if(s>max)max=s;
   });
   return max;
+}
+function conflits(){
+  var use={},ids={};
+  actifsLignes().forEach(function(d){
+    var seen={};
+    (d.lignes||[]).forEach(function(l){if(!l.materielId||!num(l.qte))return;seen[l.materielId]=(seen[l.materielId]||0)+num(l.qte);});
+    Object.keys(seen).forEach(function(mid){
+      var m=use[mid]=use[mid]||{};
+      eachDay(d.dateDebut,d.dateFin).forEach(function(day){var c=m[day]=m[day]||{q:0,ids:[]};c.q+=seen[mid];c.ids.push(d.id);});
+    });
+  });
+  var out=[],days={};
+  Object.keys(use).forEach(function(mid){
+    var m=byId(S.materiel,mid);if(!m)return;
+    var dispo=dispoInfo(m),first='',last='',max=0,set={};
+    Object.keys(use[mid]).sort().forEach(function(day){
+      var c=use[mid][day];if(c.q<=dispo)return;
+      if(!first)first=day;last=day;if(c.q>max)max=c.q;days[day]=true;c.ids.forEach(function(i){set[i]=1;});
+    });
+    if(first)out.push({mid:mid,nom:m.nom,dispo:dispo,max:max,from:first,to:last,ids:Object.keys(set)});
+  });
+  out.days=days;return out;
 }
 function dispoInfo(m){return Math.max(0,num(m.stock)-num(m.horsService));}
 function nextNumber(type){
@@ -522,6 +545,8 @@ function vDashboard(){
   ev.forEach(function(e){h+='<div class="list-row"><div><b>'+esc(e.d.titre||'Sans titre')+'</b><div class="small muted">'+esc(clientName(e.d.clientId))+(e.d.lieu?' · '+esc(e.d.lieu):'')+'</div></div><div style="text-align:right"><span class="chip '+(e.type==='À livrer'?'info':'sun')+'">'+e.type+'</span><div class="small muted">'+fmtD(e.date)+'</div></div><button class="btn btn-sm" data-action="open-dossier" data-id="'+e.d.id+'">Ouvrir</button></div>';});
   h+='</div>';var hMain=h;h='<div class="card"><div class="sec-title">À surveiller</div>';
   var alerts=[];
+  var cfl=conflits();
+  if(cfl.length)alerts.push(['Stock insuffisant sur '+cfl.length+' article(s)',cfl.slice(0,3).map(function(c){return c.nom+' : '+c.max+' demandé(s) pour '+c.dispo+' disponible(s), du '+fmtD(c.from)+(c.to!==c.from?' au '+fmtD(c.to):'');}).join(' · ')+(cfl.length>3?' …':''),'planning','data-action="open-dossier" data-id="'+cfl[0].ids[0]+'"']);
   if(retard)alerts.push(['Factures en retard de paiement',retard+' facture(s) dépassent leur échéance.','documents']);
   if(aComp)alerts.push(['Quantités à renseigner',aComp+' article(s) du catalogue ont un stock par défaut de 1. Indiquez vos vraies quantités pour que les disponibilités soient justes.','materiel']);
   var tRet=S.taches.filter(function(x){return x.statut!=='fait'&&x.echeance&&x.echeance<t;}).length,tSug=tacheSuggestions().length;
@@ -530,7 +555,7 @@ function vDashboard(){
   if(eOuv)alerts.push(['Matériel en entretien',eOuv+' intervention(s) en cours : le matériel concerné est déduit des disponibilités.','entretien']);
   if(!S.set.siret)alerts.push(['Informations légales incomplètes','Ajoutez le SIRET, l\'adresse et le régime de TVA pour vos devis et factures.','reglages']);
   if(!alerts.length)h+=empty('Tout est en ordre','Aucune alerte pour le moment.');
-  alerts.forEach(function(a){h+='<div class="list-row"><div style="flex:1 1 240px"><b>'+esc(a[0])+'</b><div class="small muted">'+esc(a[1])+'</div></div><button class="btn btn-sm" data-action="nav" data-v="'+a[2]+'">Voir</button></div>';});
+  alerts.forEach(function(a){h+='<div class="list-row"><div style="flex:1 1 240px"><b>'+esc(a[0])+'</b><div class="small muted">'+esc(a[1])+'</div></div><button class="btn btn-sm" '+(a[3]||'data-action="nav" data-v="'+a[2]+'"')+'>Voir</button></div>';});
   h+='</div>';var hSurv=h;h='';
   var tAf=S.taches.filter(function(x){return x.statut!=='fait';}).sort(function(a,b){var ea=a.echeance||'9999',eb=b.echeance||'9999';return ea<eb?-1:ea>eb?1:0;});
   h+='<div class="card"><div class="sec-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="margin-right:auto">Tâches à faire'+(tAf.length?' ('+tAf.length+')':'')+'</span><span style="display:flex;gap:6px"><button class="btn btn-sm" data-action="new-tache">'+ic('plus')+'Tâche</button><button class="btn btn-sm" data-action="nav" data-v="taches">Tout voir</button></span></div>';
@@ -553,11 +578,11 @@ function vPlanning(){
   var m=S.month,y=m.getFullYear(),mo=m.getMonth();
   var label=m.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
   var first=new Date(y,mo,1),off=(first.getDay()+6)%7,start=new Date(y,mo,1-off);
-  var cells='';
+  var cells='',CF=conflits();
   for(var i=0;i<42;i++){
     var d=new Date(start.getFullYear(),start.getMonth(),start.getDate()+i),s=iso(d);
     var ds=S.dossiers.filter(function(x){return planDay(x,s);});
-    var cls='cal-d'+(d.getMonth()!==mo?' out':'')+(s===today()?' today':'')+(S.selDay===s?' sel':'');
+    var cls='cal-d'+(d.getMonth()!==mo?' out':'')+(s===today()?' today':'')+(S.selDay===s?' sel':'')+(CF.days[s]?' conf':'');
     var chips=ds.slice(0,3).map(function(x){return '<span class="cal-chip '+payCls(x)+'" title="'+payTip(x)+'">'+quiIni(x)+esc(x.titre||'Sans titre')+'</span>';}).join('');
     cells+='<div class="'+cls+'" role="button" tabindex="0" data-action="sel-day" data-d="'+s+'"><span class="cal-n">'+d.getDate()+'</span>'+chips+(ds.length>3?'<span class="small muted">+'+(ds.length-3)+'</span>':'')+(ds.length?'<span class="cal-dot">'+ds.length+' loc.</span>':'')+'</div>';
   }
@@ -689,6 +714,9 @@ function tacheSuggestions(){
     if(rd&&d.type==='devis')out.push({titre:'Relance '+rd+'/3 : devis '+d.numero+' · '+cn,sub:'Envoyé il y a '+diffDays(d.dateEnvoi||d.dateEmission,t)+' jour(s), sans réponse',act:'q-relancer',id:d.id,n:rd,lab:'Préparer l\'e-mail'});
     else if(rd)out.push({titre:'Relance impayé '+rd+'/3 : facture '+d.numero+' · '+cn,sub:'Échéance dépassée depuis '+diffDays(d.dateEcheance,t)+' jour(s)',act:'q-relancer',id:d.id,n:rd,lab:'Préparer l\'e-mail'});
     else if(isLate(d))out.push({titre:'Relancer le paiement de la facture '+d.numero,sub:cn+' · échéance dépassée depuis le '+fmtD(d.dateEcheance),act:'open-doc',id:d.id,lab:'Ouvrir'});
+  });
+  S.dossiers.forEach(function(d){
+    if(d.statut!=='option'&&ACTIFS.indexOf(d.statut)>=0&&d.dateDebut>=t&&d.dateDebut<=addDays(t,2)&&!d.rappelClient)out.push({titre:'Rappel client avant l\'événement : '+(d.titre||'Sans titre'),sub:clientName(d.clientId)+' · livraison le '+fmtD(d.dateDebut),act:'q-rappel',id:d.id,lab:'Préparer le message'});
   });
   S.dossiers.forEach(function(d){
     if(ACTIFS.indexOf(d.statut)>=0&&d.dateDebut>=t&&d.dateDebut<=addDays(t,2))out.push({titre:'Préparer la livraison : '+(d.titre||'Sans titre'),sub:'Livraison le '+fmtD(d.dateDebut)+' · '+clientName(d.clientId),act:'open-dossier',id:d.id,lab:'Ouvrir'});
@@ -998,6 +1026,7 @@ function vReglages(){
    +'<h3>Délais et mentions</h3><div class="form-grid">'+f('delaiPaiement','Délai de paiement (jours)',s.delaiPaiement,'number')+f('validiteDevis','Validité d\'un devis (jours)',s.validiteDevis,'number')+f('emailComptable','E-mail du comptable (caisse évènement)',s.emailComptable||'','email')+'</div>'
    +'<div class="field"><label for="s-penalites">Pénalités de retard (mention sur les factures)</label><textarea id="s-penalites">'+esc(s.penalites)+'</textarea></div>'
    +'<div class="field"><label for="s-conditions">Conditions de location (caution, retrait, restitution, annulation)</label><textarea id="s-conditions" placeholder="À compléter avec vos conditions">'+esc(s.conditions)+'</textarea></div>'
+   +'<div class="field"><label for="s-cgv">Conditions générales de location (CGV, ajoutées en dernière page des devis et du contrat)</label><textarea id="s-cgv" rows="8" placeholder="Objet, durée, retrait et restitution, caution, responsabilité, annulation, litiges…">'+esc(s.cgv||'')+'</textarea></div>'
    +'<div class="field"><label for="s-rib">Coordonnées de paiement (affichées sur les factures)</label><textarea id="s-rib" placeholder="IBAN, BIC, ordre du chèque…">'+esc(s.rib)+'</textarea></div>'
    +'<div class="toolbar" style="margin:0"><button class="btn" data-action="export">'+ic('dl')+'Exporter toutes les données (JSON)</button></div></div>';
   return h;
@@ -1219,7 +1248,7 @@ function persistDossier(cb){
     var o={clientId:clientId,titre:d.titre.trim()||autoTitre(d.lignes),lieu:d.lieu||'',dateDebut:d.dateDebut,dateFin:d.dateFin,statut:d.statut,notes:d.notes||'',assigne:d.assigne||'',
       lignes:d.lignes.map(function(l){return {materielId:l.materielId||'',designation:l.designation||'',qte:num(l.qte),puHT:num(l.puHT),tva:num(l.tva),unite:l.unite||''};})};
     var id=d.id||uid('dossiers');
-    S.db.collection('dossiers').doc(id).set(o).then(function(){d.id=id;d.clientId=clientId;cb(id,o);}).catch(dbErr);
+    S.db.collection('dossiers').doc(id).set(o).then(function(){d.id=id;d.clientId=clientId;cb(id,o);setTimeout(function(){var c=conflits().filter(function(x){return x.ids.indexOf(id)>=0;});if(c.length)toast('Attention : stock insuffisant pour '+c.map(function(x){return x.nom;}).slice(0,2).join(', ')+(c.length>2?'…':'')+' sur ces dates.');},400);}).catch(dbErr);
   }
   if(d.clientId==='__new'){
     if(!d.nc.nom.trim()){toast('Indiquez le nom du nouveau client.');return;}
@@ -1256,7 +1285,7 @@ function openDoc(id,fresh){
    +'<div class="totals" style="margin-top:12px"><div><span class="muted">Total HT</span><b>'+money(d.totaux.ht)+'</b></div>'+(d.regimeTva==='franchise'?'<div class="small muted">TVA non applicable (art. 293 B du CGI)</div>':d.totaux.detail.map(function(x){return '<div><span class="muted">TVA '+String(x.taux).replace('.',',')+' %</span><span>'+money(x.montant)+'</span></div>';}).join(''))+'<div class="big"><span>Total TTC</span><span>'+money(d.totaux.ttc)+'</span></div>'+acHtml(d)+'</div></div>'+(isD&&d.signature?'<div class="sig-done"><div class="small muted">Bon pour accord · signé le '+fmtD(d.dateSignature)+(d.signataire?' par '+esc(d.signataire):'')+'</div><img src="'+d.signature+'" alt="Signature du client"></div>':'')+''+(!isD?'<div class="small muted" style="margin-top:10px">'+esc(mentionsFacture(d,soc).join(' '))+'</div>':'')+'<div id="mail-note" class="small" style="margin-top:12px">'+(num(d.relanceNiv)?'<span class="muted">Relances envoyées : '+d.relanceNiv+'/3, dernière le '+fmtD(d.derniereRelance)+'</span>':'')+'</div></div>';
   h+='<div class="modal-f">';
   if(isD&&d.statut!=='refuse'&&resteDu(d)>0)h+='<button class="btn" data-action="ac-add" data-id="'+esc(id)+'">'+ic('cash')+'Enregistrer un acompte</button>';
-  if(isD)h+=(d.statut!=='accepte'?'<button class="btn btn-danger btn-sm" data-action="del-doc" style="margin-right:auto">'+(S.confirm==='doc'?'Confirmer la suppression':'Supprimer')+'</button>':'')+(d.signature?'':'<button class="btn" data-action="sign-doc" data-id="'+esc(id)+'">'+ic('check')+'Faire signer</button>')+'<button class="btn" data-action="devis-to-facture">Transformer en facture</button>';
+  if(isD)h+=(d.statut!=='accepte'?'<button class="btn btn-danger btn-sm" data-action="del-doc" style="margin-right:auto">'+(S.confirm==='doc'?'Confirmer la suppression':'Supprimer')+'</button>':'')+(d.signature?'':'<button class="btn" data-action="sign-doc" data-id="'+esc(id)+'">'+ic('check')+'Faire signer</button>')+'<button class="btn" data-action="dl-contrat">'+ic('dl')+'Contrat de location</button>'+(window.WEB&&!d.signature&&d.statut!=='refuse'?'<button class="btn" data-action="sign-link">Lien de signature en ligne</button>':'')+'<button class="btn" data-action="devis-to-facture">Transformer en facture</button>';
   else if(d.statut==='emise')h+='<button class="btn btn-danger btn-sm" data-action="cancel-fact" style="margin-right:auto">'+(S.confirm==='fact'?'Confirmer l\'annulation':'Annuler la facture')+'</button><button class="btn" data-action="pay">Marquer comme payée</button>';
   if(d.statut==='emise'||(isD&&d.statut!=='refuse'))h+='<button class="btn" data-action="pay-card" data-id="'+esc(id)+'">'+ic('card')+'Encaisser par carte <span class="chip info" style="margin-left:4px">Aperçu</span></button>';
   h+='<button class="btn" data-action="open-dossier" data-id="'+esc(d.dossierId)+'">Voir la location</button><button class="btn" data-action="pdf">'+ic('dl')+'Télécharger le PDF</button><button class="btn btn-primary" data-action="mail">Envoyer par e-mail</button></div>';
@@ -1296,6 +1325,25 @@ function openPay(){
 
 /* --- PDF --- */
 function pm(n){var s=(Math.round(n*100)/100).toFixed(2),p=s.split('.'),neg=p[0].charAt(0)==='-';var i=p[0].replace('-','').replace(/\B(?=(\d{3})+(?!\d))/g,' ');return (neg?'-':'')+i+','+p[1]+' €';}
+function rappelMsg(d){
+  var c=byId(S.clients,d.clientId)||{},soc=S.set,cau=cautionTotale(d);
+  var sub='Rappel : votre location du '+fmtD(d.dateDebut)+(d.titre?' – '+d.titre:'');
+  var body='Bonjour '+(c.nom||'')+',\n\nPetit rappel pour votre location'+(d.titre?' « '+d.titre+' »':'')+' : livraison prévue le '+fmtD(d.dateDebut)+(d.lieu?' à '+d.lieu:'')+', récupération le '+fmtD(d.dateFin)+'.\n\nPour que tout se passe bien, merci de :\n- nous confirmer l\'adresse exacte et l\'horaire qui vous arrange ;\n- prévoir un accès dégagé pour le matériel et une personne présente sur place'+(cau>0?' ;\n- préparer le dépôt de garantie de '+pm(cau)+' (restitué après contrôle du matériel)':'')+'.\n\nÀ très bientôt,\n'+(soc.nom||'')+(soc.tel?'\n'+soc.tel:'');
+  return {to:String(c.email||'').trim(),sub:sub,body:body};
+}
+function openRappel(id){
+  var d=byId(S.dossiers,id);if(!d)return;
+  S.modal='rappel';S.draft={id:id};var m=rappelMsg(d);
+  openModal(mhead('Rappel au client')+'<div class="modal-b"><div class="field"><label for="rp-to">Destinataire</label><input id="rp-to" value="'+esc(m.to)+'" placeholder="Ajoutez l\'e-mail du client dans sa fiche"></div><div class="field"><label for="rp-sub">Objet</label><input id="rp-sub" value="'+esc(m.sub)+'"></div><div class="field"><label for="rp-body">Message</label><textarea id="rp-body" rows="11">'+esc(m.body)+'</textarea></div><div id="rp-note" class="small"></div></div>'
+   +'<div class="modal-f"><button class="btn" data-action="rappel-done">Marquer comme envoyé</button>'+(S.mcp?'<button class="btn btn-primary" data-action="rappel-draft">Créer le brouillon Gmail</button>':'<a class="btn btn-primary" id="rp-mailto" target="_blank" rel="noopener" href="#">Ouvrir dans ma messagerie</a>')+'</div>');
+  setTimeout(function(){var a=document.getElementById('rp-mailto');if(a)a.addEventListener('click',function(){a.href='mailto:'+encodeURIComponent($('#rp-to').value.trim())+'?subject='+encodeURIComponent($('#rp-sub').value)+'&body='+encodeURIComponent($('#rp-body').value);});},30);
+}
+function rappelDraft(){
+  var to=$('#rp-to').value.trim(),n=$('#rp-note');
+  if(!to){n.innerHTML='<span style="color:var(--bad)">Indiquez l\'adresse e-mail du client.</span>';return;}
+  n.innerHTML='<span class="muted">Préparation du brouillon…</span>';
+  S.mcp.callTool('Gmail','create_draft',{to:[to],subject:$('#rp-sub').value,body:$('#rp-body').value}).then(function(){n.innerHTML='<span style="color:var(--ok)"><b>Brouillon créé dans Gmail.</b> Ouvrez Gmail pour relire et envoyer, puis cliquez sur « Marquer comme envoyé ».</span>';}).catch(function(){n.innerHTML='<span style="color:var(--bad)">Le brouillon n\'a pas pu être créé. Connectez Gmail dans claude.ai.</span>';});
+}
 function openSign(id){
   var d=byId(S.documents,id);if(!d)return;
   S.modal='sign';S.draft={id:id};
@@ -1375,7 +1423,51 @@ function buildPdf(d){
   else{notes.push('Paiement à réception, au plus tard le '+fmtD(d.dateEcheance)+'.');mentionsFacture(d,soc).forEach(function(m){notes.push(m);});if(soc.rib)notes.push(soc.rib);if(soc.penalites)notes.push(soc.penalites);if(soc.conditions)notes.push(soc.conditions);}
   notes.forEach(function(t){var l=pdf.splitTextToSize(t,W-2*M);if(y+l.length*4>285){pdf.addPage();y=20;}pdf.text(l,M,y);y+=l.length*4+2;});
   if(isD){if(y>240){pdf.addPage();y=20;}pdf.setDrawColor(150);pdf.rect(W/2,y+2,W/2-M,26);pdf.setFont('helvetica','bold');pdf.text(d.signature?('Bon pour accord · signé le '+fmtD(d.dateSignature)+(d.signataire?' par '+d.signataire:'')):'Bon pour accord, date et signature',W/2+3,y+8);if(d.signature){try{pdf.addImage(d.signature,'PNG',W/2+4,y+10,48,16);}catch(e){}}}
+  if(isD)cgvPage(pdf,soc,W,M);
   return pdf.output('blob');
+}
+function cgvPage(pdf,soc,W,M){
+  var t=String((soc&&soc.cgv)||S.set.cgv||'').trim();if(!t)return;
+  pdf.addPage();var y=20;pdf.setFont('helvetica','bold');pdf.setFontSize(13);pdf.text('Conditions générales de location',M,y);y+=8;
+  pdf.setFont('helvetica','normal');pdf.setFontSize(8.5);
+  pdf.splitTextToSize(t,W-2*M).forEach(function(l){if(y>285){pdf.addPage();y=20;}pdf.text(l,M,y);y+=4;});
+}
+function cautionTotale(d){
+  return (d.lignes||[]).reduce(function(s,l){var m=l.materielId?byId(S.materiel,l.materielId):null;return s+(m&&m.caution?num(m.caution)*num(l.qte):0);},0);
+}
+function buildContratPdf(d){
+  var J=window.jspdf&&window.jspdf.jsPDF;if(!J||typeof J.API.autoTable!=='function')return null;
+  var pdf=new J({unit:'mm',format:'a4'}),W=210,M=15,y=18,soc=d.societeSnap||S.set,cl=d.clientSnap||{};
+  pdf.setFont('helvetica','bold');pdf.setFontSize(18);pdf.text('CONTRAT DE LOCATION',M,y);
+  pdf.setFontSize(10);pdf.text('Réf. '+(d.numero||''),W-M,y,{align:'right'});
+  pdf.setFont('helvetica','normal');pdf.setFontSize(10);y+=10;
+  function bloc(t,lines){pdf.setFont('helvetica','bold');pdf.text(t,M,y);y+=5;pdf.setFont('helvetica','normal');lines.filter(Boolean).forEach(function(x){pdf.splitTextToSize(x,W-2*M).forEach(function(l){pdf.text(l,M,y);y+=5;});});y+=3;}
+  bloc('Le loueur',[soc.nom||'',soc.adresse||'',(soc.tel?'Tél. '+soc.tel:'')+(soc.email?'  ·  '+soc.email:''),soc.siret?'SIRET '+soc.siret:'']);
+  bloc('Le locataire',[cl.nom||'',cl.adresse||'',(cl.tel?'Tél. '+cl.tel:'')+(cl.email?'  ·  '+cl.email:''),cl.siret?'SIRET '+cl.siret:'']);
+  bloc('Location',[(d.titre?'Événement : '+d.titre:''),'Lieu : '+(d.lieu||'—'),'Du '+fmtD(d.dateDebut)+' au '+fmtD(d.dateFin)]);
+  var rows=(d.lignes||[]).filter(function(l){return l.unite!=='remise'&&l.unite!=='km';}).map(function(l){return [l.designation,String(l.qte)];});
+  pdf.autoTable({startY:y,margin:{left:M,right:M},head:[['Matériel loué','Qté']],body:rows,styles:{font:'helvetica',fontSize:10,cellPadding:2.5},headStyles:{fillColor:PC(),textColor:PG()},columnStyles:{1:{halign:'right',cellWidth:20}}});
+  y=pdf.lastAutoTable.finalY+8;if(y>235){pdf.addPage();y=20;}
+  var cau=cautionTotale(d),lines=['Prix de la location : '+pm(d.totaux.ttc)+' TTC'];
+  if(acList(d).length)lines.push('Acomptes versés : '+pm(acTot(d))+' · reste à payer : '+pm(resteDu(d)));
+  else if(num(d.acomptePct)>0)lines.push('Acompte à la réservation : '+pm(d.totaux.ttc*num(d.acomptePct)/100));
+  lines.push(cau>0?'Dépôt de garantie (caution) : '+pm(cau)+', restitué après contrôle du matériel au retour.':'Dépôt de garantie (caution) : selon conditions ci-dessous.');
+  bloc('Prix et garantie',lines);
+  if(soc.conditions){pdf.setFont('helvetica','bold');pdf.setFontSize(10);if(y>270){pdf.addPage();y=20;}pdf.text('Conditions particulières',M,y);y+=5;pdf.setFont('helvetica','normal');pdf.setFontSize(9);pdf.splitTextToSize(soc.conditions,W-2*M).forEach(function(l){if(y>285){pdf.addPage();y=20;}pdf.text(l,M,y);y+=4.2;});y+=4;}
+  if(y>235){pdf.addPage();y=20;}
+  pdf.setFontSize(9);pdf.text('Le locataire reconnaît avoir reçu le matériel en bon état, s\'engage à le restituer dans le même état et accepte les conditions générales ci-jointes.',M,y,{maxWidth:W-2*M});y+=10;
+  pdf.setDrawColor(150);pdf.rect(M,y,(W-2*M)/2-4,28);pdf.rect(W/2+4,y,(W-2*M)/2-4,28);
+  pdf.setFont('helvetica','bold');pdf.text('Le loueur (signature)',M+3,y+6);pdf.text('Le locataire (« lu et approuvé »)',W/2+7,y+6);
+  if(d.signature){try{pdf.addImage(d.signature,'PNG',W/2+8,y+9,48,16);}catch(e){}}
+  cgvPage(pdf,soc,W,M);
+  return pdf.output('blob');
+}
+function downloadContrat(){
+  var d=curDoc();if(!d)return;
+  if(!S.dl){toast('Le téléchargement n\'est pas disponible dans cette vue.');return;}
+  var blob;try{blob=buildContratPdf(d);}catch(e){blob=null;}
+  if(!blob){toast('Le générateur de PDF n\'a pas pu se charger. Vérifiez votre connexion.');return;}
+  S.dl.save({filename:'Contrat-de-location-'+d.numero+'.pdf',data:blob}).then(function(){toast('Contrat enregistré');}).catch(function(e){if(e&&e.code!=='declined')toast('Téléchargement impossible.');});
 }
 function buildPrepPdf(d){
   var J=window.jspdf&&window.jspdf.jsPDF;if(!J||typeof J.API.autoTable!=='function')return null;
@@ -1670,6 +1762,9 @@ var A={
   'save-dossier':function(){persistDossier(function(){toast('Location enregistrée');closeModal();});},
   dtype:function(t){S.f.dtype=t.dataset.t;S.f.statut='';S.f.q='';render();},
   'q-envoyer':function(t){S.draft={id:t.dataset.id};openDoc(t.dataset.id);setTimeout(sendMail,60);},
+  'q-rappel':function(t){openRappel(t.dataset.id);},
+  'rappel-draft':function(){rappelDraft();},
+  'rappel-done':function(){var id=S.draft&&S.draft.id;if(!id)return;S.db.collection('dossiers').doc(id).update({rappelClient:today()}).then(function(){toast('Rappel marqué comme envoyé');closeModal();}).catch(dbErr);},
   'q-relancer':function(t){S.draft={id:t.dataset.id};openDoc(t.dataset.id);var n=+t.dataset.n||1;setTimeout(function(){sendMail(n);},60);},
   'sig-clear':function(){var c=document.getElementById('sig-pad');if(!c)return;c.getContext('2d').clearRect(0,0,c.width,c.height);SIG.ink=false;var h=document.getElementById('sig-hint');if(h)h.hidden=false;},
   'sig-ok':function(){
@@ -1679,6 +1774,17 @@ var A={
     var nom=($('#sig-nom').value||'').trim(),img=o.toDataURL('image/png');
     S.db.collection('documents').doc(id).update({statut:'accepte',signature:img,signataire:nom,dateSignature:today()}).then(function(){toast('Devis signé et accepté');var d=byId(S.documents,id);openDoc(id,Object.assign({},d,{statut:'accepte',signature:img,signataire:nom,dateSignature:today()}));}).catch(dbErr);},
   'sign-doc':function(t){openSign(t.dataset.id);},
+  'dl-contrat':function(){downloadContrat();},
+  'sign-link':function(){
+    var d=curDoc();if(!d)return;
+    var tok=d.signToken;
+    if(!tok){var a=new Uint8Array(24);crypto.getRandomValues(a);tok=btoa(String.fromCharCode.apply(null,a)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
+    S.db.collection('documents').doc(d.id).update({signToken:tok}).then(function(){
+      var link=location.origin+'/signer?t='+tok,to=(d.clientSnap&&d.clientSnap.email)||'';
+      var sub='Devis '+d.numero+' à signer en ligne',body='Bonjour '+((d.clientSnap&&d.clientSnap.nom)||'')+',\n\nVous pouvez consulter et signer votre devis n° '+d.numero+' directement en ligne :\n'+link+'\n\nRestant à votre disposition,\n'+(S.set.nom||'');
+      mailNote('<div><b>Lien de signature</b> (à envoyer au client) :<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><input id="sig-link" readonly value="'+esc(link)+'" style="flex:1 1 240px;min-width:0"><button class="btn btn-sm" data-action="copy-link">Copier</button><a class="btn btn-sm" href="mailto:'+encodeURIComponent(to)+'?subject='+encodeURIComponent(sub)+'&body='+encodeURIComponent(body)+'" target="_blank" rel="noopener">Écrire l\'e-mail</a></div><div class="muted" style="margin-top:6px">Le client signe sur son téléphone ; le devis passe alors en « accepté » ici.</div></div>');
+    }).catch(dbErr);},
+  'copy-link':function(){var i=$('#sig-link');if(!i)return;i.select();try{navigator.clipboard.writeText(i.value).then(function(){toast('Lien copié');}).catch(function(){document.execCommand('copy');toast('Lien copié');});}catch(e){try{document.execCommand('copy');toast('Lien copié');}catch(e2){}}},
   'sel-doc':function(t){var id=t.dataset.id;if(SEL[id])delete SEL[id];else SEL[id]=true;refreshList();},
   'grp-clear':function(){SEL={};refreshList();},
   'grp-facturer':function(){
@@ -1743,12 +1849,12 @@ var A={
   'devis-to-facture':function(){
     var d=curDoc();if(!d)return;
     var t=today(),doc=Object.assign({},d);delete doc.id;
-    doc.type='facture';doc.numero=nextNumber('facture');doc.dateEmission=t;doc.dateEcheance=addDays(t,num(S.set.delaiPaiement)||30);doc.statut='emise';delete doc.dateValidite;delete doc.signature;delete doc.signataire;delete doc.dateSignature;doc.devisId=d.id;
+    doc.type='facture';doc.numero=nextNumber('facture');doc.dateEmission=t;doc.dateEcheance=addDays(t,num(S.set.delaiPaiement)||30);doc.statut='emise';delete doc.dateValidite;delete doc.signature;delete doc.signataire;delete doc.dateSignature;delete doc.signToken;delete doc.signeEnLigne;delete doc.signeLe;delete doc.signeIp;doc.devisId=d.id;
     var did=uid('documents');
     S.db.collection('documents').doc(did).set(doc).then(function(){return S.db.collection('documents').doc(d.id).update({statut:'accepte'});}).then(function(){toast('Facture '+doc.numero+' créée');chkSiren(doc.clientId);openDoc(did,doc);}).catch(dbErr);},
   'save-settings':function(){
     var g=function(k){return $('#s-'+k).value;};
-    var o={emailComptable:g('emailComptable').trim(),nom:g('nom').trim(),adresse:g('adresse').trim(),tel:g('tel').trim(),email:g('email').trim(),siret:g('siret').trim(),tvaNumero:g('tvaNumero').trim(),forme:g('forme').trim(),capital:g('capital').trim(),rcsVille:g('rcsVille').trim(),tvaDebits:g('tvaDebits'),regimeTva:g('regimeTva'),tvaDefaut:num(g('tvaDefaut')),prixCatalogue:g('prixCatalogue'),tarifKm:Math.max(0,num(g('tarifKm'))),acomptePct:Math.min(100,Math.max(0,num(g('acomptePct')))),delaiPaiement:Math.max(0,Math.round(num(g('delaiPaiement')))),validiteDevis:Math.max(1,Math.round(num(g('validiteDevis')))),penalites:g('penalites').trim(),conditions:g('conditions').trim(),rib:g('rib').trim()};
+    var o={emailComptable:g('emailComptable').trim(),nom:g('nom').trim(),adresse:g('adresse').trim(),tel:g('tel').trim(),email:g('email').trim(),siret:g('siret').trim(),tvaNumero:g('tvaNumero').trim(),forme:g('forme').trim(),capital:g('capital').trim(),rcsVille:g('rcsVille').trim(),tvaDebits:g('tvaDebits'),regimeTva:g('regimeTva'),tvaDefaut:num(g('tvaDefaut')),prixCatalogue:g('prixCatalogue'),tarifKm:Math.max(0,num(g('tarifKm'))),acomptePct:Math.min(100,Math.max(0,num(g('acomptePct')))),delaiPaiement:Math.max(0,Math.round(num(g('delaiPaiement')))),validiteDevis:Math.max(1,Math.round(num(g('validiteDevis')))),penalites:g('penalites').trim(),conditions:g('conditions').trim(),cgv:g('cgv').trim(),rib:g('rib').trim()};
     S.db.doc('config/societe').set(Object.assign({},S.set,o)).then(function(){toast('Réglages enregistrés');}).catch(dbErr);},
   export:exportData
 };
