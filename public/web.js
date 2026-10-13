@@ -165,7 +165,7 @@
     var el = document.getElementById('web-login'); if (el) el.remove();
     el = document.createElement('div'); el.id = 'web-login';
     var setup = !!needSetup;
-    el.innerHTML = '<form class="web-card" id="web-form" autocomplete="on"><h2>Régie Grand Ouest</h2>' +
+    el.innerHTML = '<form class="web-card" id="web-form" autocomplete="on"><h2>Loc en poche</h2>' +
       '<div class="muted">' + (setup ? 'Première configuration : créez le compte administrateur.' : 'Connectez-vous pour accéder à votre gestion.') + '</div>' +
       (setup ? '<label>Code de première configuration<input id="w-code" autocomplete="off" required></label><label>Votre nom<input id="w-name" autocomplete="name" required></label>' : '') +
       '<label>Adresse e-mail<input id="w-email" type="email" autocomplete="username" required></label>' +

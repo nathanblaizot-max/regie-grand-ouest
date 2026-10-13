@@ -1,6 +1,6 @@
 {
-  "name": "Régie Grand Ouest",
-  "short_name": "Régie",
+  "name": "Loc en poche",
+  "short_name": "Loc en poche",
   "description": "Gestion de location de matériel événementiel",
   "start_url": "/",
   "display": "standalone",

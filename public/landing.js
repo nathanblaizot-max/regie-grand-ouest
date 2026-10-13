@@ -1,7 +1,7 @@
 /* Page d'accueil vendeuse, affichée aux visiteurs non connectés. */
 (function () {
   var CONTACT = 'nathan.blaizot@gmail.com'; // adresse affichée pour « Demander une démo »
-  var NOM = 'Régie';
+  var NOM = 'Loc en poche';
   var SIGNATURE = 'par Sud Manche Locations';
 
   var CSS = '' +

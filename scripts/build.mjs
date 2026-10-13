@@ -24,6 +24,9 @@ patch(
   'add-line':function(){`
 );
 
+// Nom du produit en ligne.
+patch('<title>Régie Grand Ouest</title>', '<title>Loc en poche</title>');
+
 const head = `<!doctype html>
 <html lang="fr">
 <head>
@@ -31,8 +34,8 @@ const head = `<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#023047">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Régie">
-<meta name="description" content="Régie : devis, factures, stock, clients et caisse d’évènement pour les loueurs de matériel. Sur téléphone et ordinateur.">
+<meta name="apple-mobile-web-app-title" content="Loc en poche">
+<meta name="description" content="Loc en poche : devis, factures, stock, clients et caisse d’évènement pour les loueurs de matériel. Sur téléphone et ordinateur.">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon-192.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
