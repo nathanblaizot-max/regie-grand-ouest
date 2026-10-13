@@ -3,7 +3,8 @@
 (function () {
   'use strict';
   var API = '/api/';
-  var POLL_MS = 4000;
+  var POLL_FAST = 5000, POLL_SLOW = 20000, SLOW_AFTER = 6; // rythme de vérification : rapide tant que ça bouge, lent au repos
+  var quiet = 0;             // nombre de vérifications consécutives sans nouveauté
   var cache = {};            // col -> { id: data }
   var colCbs = {};           // col -> [{ok, err}]
   var docCbs = {};           // 'col/id' -> [{ok, err}]
@@ -60,12 +61,12 @@
         if (r.status === 401) { var e = new Error('auth'); e.auth = true; throw e; }
         if (r.status !== 200) throw new Error('sync ' + r.status);
         apply(r.body.docs).forEach(function (c) { changedAll[c] = 1; });
-        if (r.body.max > lastSeq) lastSeq = r.body.max;
+        if (r.body.max > lastSeq) { lastSeq = r.body.max; quiet = 0; }
         if (r.body.more) return page();
       });
     }
     return page().then(function () {
-      syncing = false; failCount = 0;
+      syncing = false; failCount = 0; quiet++;
       if (!loaded) {
         loaded = true;
         fire(Object.keys(colCbs).concat(Object.keys(docCbs).map(function (k) { return k.split('/')[0]; })).filter(function (v, i, a) { return a.indexOf(v) === i; }));
@@ -79,8 +80,15 @@
   }
   function startPolling() {
     if (timer) return;
-    timer = setInterval(function () { if (!document.hidden) sync(); }, POLL_MS);
-    document.addEventListener('visibilitychange', function () { if (!document.hidden) sync(); });
+    timer = 1;
+    function tick() {
+      var wait = quiet >= SLOW_AFTER ? POLL_SLOW : POLL_FAST;
+      setTimeout(function () { if (!document.hidden) sync().then(tick, tick); else tick(); }, wait);
+    }
+    tick();
+    function wake() { quiet = 0; }
+    ['click', 'keydown', 'touchstart'].forEach(function (ev) { document.addEventListener(ev, wake, { passive: true }); });
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) { quiet = 0; sync(); } });
     window.addEventListener('online', sync);
   }
   function write(ops) {
@@ -88,7 +96,7 @@
     return api('POST', 'write', { ops: ops }).then(function (r) {
       if (r.status === 401) { showLogin(); throw { code: 'non-connecte' }; }
       if (r.status !== 200) throw { code: r.body && r.body.error || 'erreur' };
-      setTimeout(sync, 30);
+      quiet = 0; setTimeout(sync, 30);
       return r.body;
     }, function () { throw { code: 'hors-ligne' }; });
   }

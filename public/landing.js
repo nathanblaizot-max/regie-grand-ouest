@@ -118,6 +118,7 @@
 
   function show(onLogin) {
     if (!document.getElementById('lp-css')) {
+      ['https://fonts.googleapis.com','https://fonts.gstatic.com'].forEach(function (h) { var c = document.createElement('link'); c.rel = 'preconnect'; c.href = h; if (h.indexOf('gstatic') > 0) c.crossOrigin = ''; document.head.appendChild(c); });
       var l = document.createElement('link'); l.rel = 'stylesheet';
       l.href = 'https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Inter:wght@400;500;600&display=swap';
       document.head.appendChild(l);
