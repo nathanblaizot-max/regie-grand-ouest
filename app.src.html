@@ -1342,7 +1342,7 @@ function rappelDraft(){
   var to=$('#rp-to').value.trim(),n=$('#rp-note');
   if(!to){n.innerHTML='<span style="color:var(--bad)">Indiquez l\'adresse e-mail du client.</span>';return;}
   n.innerHTML='<span class="muted">Préparation du brouillon…</span>';
-  S.mcp.callTool('Gmail','create_draft',{to:[to],subject:$('#rp-sub').value,body:$('#rp-body').value}).then(function(){n.innerHTML='<span style="color:var(--ok)"><b>Brouillon créé dans Gmail.</b> Ouvrez Gmail pour relire et envoyer, puis cliquez sur « Marquer comme envoyé ».</span>';}).catch(function(){n.innerHTML='<span style="color:var(--bad)">Le brouillon n\'a pas pu être créé. Connectez Gmail dans claude.ai.</span>';});
+  S.mcp.callTool('Gmail','create_draft',{to:[to],subject:$('#rp-sub').value,body:$('#rp-body').value}).then(function(res){var p=res&&res.payload,did=p&&typeof p==='object'&&p.id;n.innerHTML='<div style="color:var(--ok)"><b>Brouillon créé dans Gmail.</b></div>'+(did?'<div style="margin-top:8px"><button class="btn btn-primary btn-sm" data-action="mail-send" data-draft="'+esc(did)+'" data-to="'+esc(to)+'" data-rappel="'+esc(S.draft.id)+'">Envoyer le mail</button></div>':'');}).catch(function(){n.innerHTML='<span style="color:var(--bad)">Le brouillon n\'a pas pu être créé. Connectez Gmail dans claude.ai.</span>';});
 }
 function openSign(id){
   var d=byId(S.documents,id);if(!d)return;
@@ -1538,8 +1538,8 @@ function sendMail(lvl){
   fr.onload=function(){
     var b64=String(fr.result).split(',')[1]||'';
     S.mcp.callTool('Gmail','create_draft',{to:[to],subject:subject,body:body,attachments:[{content:b64,filename:label.replace(/\s+/g,'-')+'.pdf',mimeType:'application/pdf'}]}).then(function(res){
-      var p=res&&res.payload,url=p&&typeof p==='object'&&p.viewUrl;
-      mailNote('<div style="color:var(--ok)"><b>Brouillon créé dans Gmail</b>, avec le PDF en pièce jointe, adressé à '+esc(to)+'. Ouvrez Gmail pour relire et envoyer.'+(url&&/^https:\/\//.test(url)?' <a href="'+esc(url)+'" target="_blank" rel="noopener">Ouvrir le brouillon</a>':'')+'</div>');
+      var p=res&&res.payload,url=p&&typeof p==='object'&&p.viewUrl,did=p&&typeof p==='object'&&p.id;
+      mailNote('<div style="color:var(--ok)"><b>Brouillon créé dans Gmail</b>, avec le PDF en pièce jointe, adressé à '+esc(to)+'.'+(url&&/^https:\/\//.test(url)?' <a href="'+esc(url)+'" target="_blank" rel="noopener">Ouvrir le brouillon</a>':'')+'</div>'+(did?'<div style="margin-top:8px"><button class="btn btn-primary btn-sm" data-action="mail-send" data-draft="'+esc(did)+'" data-to="'+esc(to)+'">Envoyer le mail</button></div>':''));
       if(lvl>0)S.db.collection('documents').doc(d.id).update({relanceNiv:lvl,derniereRelance:today()}).catch(dbErr);
       else if(isD&&d.statut==='brouillon')S.db.collection('documents').doc(d.id).update({statut:'envoye',dateEnvoi:today(),relanceNiv:0}).catch(dbErr);
     }).catch(function(e){
@@ -1763,6 +1763,15 @@ var A={
   'save-dossier':function(){persistDossier(function(){toast('Location enregistrée');closeModal();});},
   dtype:function(t){S.f.dtype=t.dataset.t;S.f.statut='';S.f.q='';render();},
   'q-envoyer':function(t){S.draft={id:t.dataset.id};openDoc(t.dataset.id);setTimeout(sendMail,60);},
+  'mail-send':function(t){
+    if(t.dataset.ok!=='1'){t.dataset.ok='1';t.textContent='Confirmer l\'envoi à '+(t.dataset.to||'');return;}
+    t.disabled=true;t.textContent='Envoi…';
+    var rid=t.dataset.rappel;
+    S.mcp.callTool('Gmail','send_message',{draftId:t.dataset.draft}).then(function(){
+      var box=t.parentNode;if(box)box.innerHTML='<span style="color:var(--ok)"><b>Mail envoyé</b> à '+esc(t.dataset.to||'')+'.</span>';
+      toast('Mail envoyé');
+      if(rid)S.db.collection('dossiers').doc(rid).update({rappelClient:today()}).catch(dbErr);
+    }).catch(function(){t.disabled=false;t.dataset.ok='';t.textContent='Envoyer le mail';toast('Envoi impossible. Ouvrez le brouillon dans Gmail pour l\'envoyer.');});},
   'q-rappel':function(t){openRappel(t.dataset.id);},
   'rappel-draft':function(){rappelDraft();},
   'rappel-done':function(){var id=S.draft&&S.draft.id;if(!id)return;S.db.collection('dossiers').doc(id).update({rappelClient:today()}).then(function(){toast('Rappel marqué comme envoyé');closeModal();}).catch(dbErr);},
