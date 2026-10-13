@@ -76,7 +76,7 @@
       ['users', 'Tes clients et leur historique', 'Particuliers et professionnels, avec leurs coordonnées et tous leurs dossiers. Un nouveau client se crée directement dans le devis.'],
       ['check', 'Payé, récupéré : tout en un coup d’œil', 'Des pastilles de statut que tu touches pour les changer. Tu sais à tout moment ce qui est parti, ce qui est revenu et ce qui reste à encaisser.'],
       ['cash', 'Caisse pour tes évènements payants', 'Compte les entrées en espèces, carte bleue et chèque, vois l’écart avec la caisse réelle, puis envoie le récapitulatif à ton comptable.'],
-      ['palette', 'À tes couleurs, avec ton logo', 'Tes devis, tes factures et l’appli prennent l’identité de ton entreprise. Tu règles tout toi-même depuis les réglages.']
+      ['palette', 'Personnalisable selon tes besoins', 'Tes couleurs, ton logo, tes tarifs, tes documents : tout se règle depuis les réglages, et l’appli s’adapte à ta façon de travailler.']
     ];
     var cards = feat.map(function (f) { return '<article class="lp-card"><div class="ic">' + ICONS[f[0]] + '</div><h3>' + f[1] + '</h3><p>' + f[2] + '</p></article>'; }).join('');
     return '' +
@@ -88,7 +88,7 @@
       '<h1>Ta location de matériel, <em>enfin sous contrôle</em>.</h1>' +
       '<p class="lead">Devis, factures, stock, clients, paiements et caisse d’évènement. Tout dans une seule appli, sur ton téléphone comme sur ton ordinateur. Pensée par un loueur, pour les loueurs.</p>' +
       '<div class="lp-cta"><a class="lp-btn gold" href="mailto:' + CONTACT + '?subject=' + encodeURIComponent('Démo de ' + NOM) + '">Demander une démo</a><button class="lp-btn ghost" data-lp="login" type="button">J’ai déjà un compte</button></div>' +
-      '<p class="lp-note">Pas de logiciel à installer : ça s’ouvre dans le navigateur.</p></div>' +
+      '<p class="lp-note">Pas de logiciel à installer : ça s’ouvre dans le navigateur. Tout est personnalisable selon tes besoins.</p></div>' +
       '<div class="lp-mock" role="img" aria-label="Exemple de devis dans l’application"><div class="top"><span class="tag">Devis</span><span>Exemple</span></div>' +
       '<h3>Mariage de Camille et Hugo</h3><div class="sub">Samedi · 120 invités</div>' +
       '<div style="margin-top:10px"><div class="row"><span>Tente de réception 5 × 6 m</span><span>220,00 €</span></div><div class="row"><span>Tables et bancs × 15</span><span>135,00 €</span></div><div class="row"><span>Livraison et reprise</span><span>45,00 €</span></div></div>' +
@@ -110,6 +110,7 @@
       '<article class="lp-card"><div class="ic">' + ICONS.users + '</div><h3>Pour toute l’équipe</h3><p>Chaque personne a son propre accès. Tu gères les comptes, tu sais qui fait quoi.</p></article>' +
       '<article class="lp-card"><div class="ic">' + ICONS.lock + '</div><h3>Tes données t’appartiennent</h3><p>Connexion sécurisée par mot de passe, données hébergées en ligne, export possible à tout moment.</p></article></div></div></section>' +
 
+      '<section class="lp-sec alt"><div class="lp-wrap" style="text-align:center"><h2>Une appli qui s’adapte à toi, pas l’inverse</h2><p class="intro" style="margin-inline:auto">Chaque loueur travaille à sa façon. Tout est personnalisable selon tes besoins: l’identité visuelle, le catalogue, les tarifs, les documents et les fonctions utiles à ton activité.</p></div></section>' +
       '<section class="lp-final"><div class="lp-wrap"><h2>Prêt à gagner du temps sur chaque location ?</h2><p>Dis-nous comment tu travailles, on te montre l’appli en direct sur un cas réel.</p>' +
       '<div class="lp-cta"><a class="lp-btn gold" href="mailto:' + CONTACT + '?subject=' + encodeURIComponent('Démo de ' + NOM) + '">Demander une démo</a><button class="lp-btn ghost" data-lp="login" type="button">Se connecter</button></div>' +
       '<p style="font-size:14px;margin-top:16px">Ou écris-nous directement : <a href="mailto:' + CONTACT + '">' + CONTACT + '</a></p></div></section>' +
