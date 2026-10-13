@@ -1,0 +1,40 @@
+import { createRequire } from 'node:module';
+import assert from 'node:assert/strict';
+import { startServer } from './dev-server.mjs';
+const require = createRequire('/opt/node22/lib/node_modules/');
+const { chromium } = require('playwright');
+const { server, port } = await startServer();
+const browser = await chromium.launch({ args: ['--no-sandbox'] });
+const errs = [];
+try {
+  const page = await (await browser.newContext({ viewport: { width: 400, height: 860 } })).newPage();
+  page.on('pageerror', e => errs.push(e.message));
+  await page.goto('http://127.0.0.1:' + port + '/'); await page.waitForSelector('#web-form');
+  await page.fill('#w-code', 'TESTCODE'); await page.fill('#w-name', 'N'); await page.fill('#w-email', 'n@t.fr'); await page.fill('#w-pass', 'motdepasse1');
+  await page.click('#web-form button'); await page.waitForSelector('nav.nav button');
+  await page.evaluate(async () => {
+    const db = await window.claude.use('db');
+    await db.collection('documents').doc('f1').set({ type: 'facture', numero: 'F-2026-0001', statut: 'emise', titre: 'Mariage Test', dossierId: 'd1', clientSnap: { nom: 'Martin Paul' }, societeSnap: { nom: 'Grand Ouest Locations' }, lignes: [{ designation: 'Tente 5x6', qte: 1, puHT: 200, tva: 20 }], totaux: { ht: 200, ttc: 240, detail: [{ taux: 20, montant: 40 }] }, regimeTva: 'normal', dateEmission: '2026-10-13', dateEcheance: '2026-11-13', dateDebut: '2026-10-20', dateFin: '2026-10-21' });
+  });
+  await page.click('nav.nav button:has-text("Devis et factures")');
+  await page.click('[data-action="dtype"][data-t="facture"]');
+  await page.waitForSelector('text=F-2026-0001');
+  await page.click('text=F-2026-0001');
+  await page.waitForSelector('[data-action="pay-card"]');
+  await page.click('[data-action="pay-card"]');
+  await page.waitForSelector('text=Aperçu de la future fonction');
+  assert.ok(await page.locator('button:has-text("Encaisser 72,00")').count(), 'acompte 30 % = 72 €');
+  await page.click('[data-action="pay-card-type"][data-t="solde"]');
+  assert.ok(await page.locator('button:has-text("Encaisser 240,00")').count(), 'totalité');
+  await page.click('[data-action="pay-card-type"][data-t="autre"]');
+  await page.fill('#pc-autre', '100'); await page.keyboard.press('Tab');
+  await page.waitForSelector('button:has-text("Encaisser 100,00")');
+  await page.click('[data-action="pay-card-mode"][data-m="qr"]');
+  await page.screenshot({ path: process.argv[2] || '/tmp/paycard.png' });
+  await page.click('[data-action="pay-card-go"]');
+  await page.waitForSelector('text=aucun paiement');
+  const statut = await page.evaluate(async () => { const r = await (await fetch('/api/sync?since=0&limit=400', { credentials: 'same-origin' })).json(); return r.docs.find(d => d.col === 'documents' && d.id === 'f1').data.statut; });
+  assert.equal(statut, 'emise', 'aucune écriture');
+  assert.deepEqual(errs, []);
+  console.log('Aperçu encaissement carte : OK');
+} catch (e) { console.error('ÉCHEC', e.message.split('\n')[0], errs); process.exitCode = 1; } finally { await browser.close(); server.close(); }
