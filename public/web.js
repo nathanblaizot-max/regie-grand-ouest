@@ -170,7 +170,7 @@
       (setup ? '<label>Code de première configuration<input id="w-code" autocomplete="off" required></label><label>Votre nom<input id="w-name" autocomplete="name" required></label>' : '') +
       '<label>Adresse e-mail<input id="w-email" type="email" autocomplete="username" required></label>' +
       '<label>Mot de passe' + (setup ? ' (8 caractères minimum)' : '') + '<input id="w-pass" type="password" autocomplete="' + (setup ? 'new-password' : 'current-password') + '" required minlength="' + (setup ? 8 : 1) + '"></label>' +
-      '<div class="err" id="w-err" role="alert"></div><button class="btn p" type="submit">' + (setup ? 'Créer le compte' : 'Se connecter') + '</button></form>';
+      '<div class="err" id="w-err" role="alert"></div><button class="btn p" type="submit">' + (setup ? 'Créer le compte' : 'Se connecter') + '</button>' + (!setup && window.WEB_LANDING ? '<button class="btn" type="button" id="w-back">← Retour à l’accueil</button>' : '') + '</form>';
     document.body.appendChild(el);
     var f = document.getElementById('web-form');
     f.addEventListener('submit', function (e) {
@@ -183,13 +183,15 @@
         else { btn.disabled = false; document.getElementById('w-err').textContent = msgFor(r.body && r.body.error); }
       }, function () { btn.disabled = false; document.getElementById('w-err').textContent = 'Connexion impossible : vérifiez votre accès à Internet.'; });
     });
+    var back = document.getElementById('w-back'); if (back) back.addEventListener('click', function () { el.remove(); showHome(); });
     var first = document.getElementById(setup ? 'w-code' : 'w-email'); if (first) first.focus();
   }
+  function showHome() { if (window.WEB_LANDING) window.WEB_LANDING.show(function () { showLogin(false); }); else showLogin(false); }
   function begin() { WEB.user = me; startPolling(); sync().then(function () { readyResolve(); }); }
   function boot() {
     api('GET', 'me').then(function (r) {
       if (r.status === 200) { me = r.body.user; begin(); }
-      else showLogin(r.body && r.body.needSetup);
+      else if (r.body && r.body.needSetup) showLogin(true); else showHome();
     }, function () { injectCss(); document.body.insertAdjacentHTML('beforeend', '<div id="web-login"><div class="web-card"><h2>Hors connexion</h2><div class="muted">Impossible de joindre le serveur. Vérifiez votre connexion puis rechargez la page.</div></div></div>'); });
   }
 

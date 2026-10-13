@@ -64,6 +64,8 @@ try {
   // déconnexion
   await page.click('nav.nav button:has-text("Réglages")');
   await page.click('button:has-text("Se déconnecter")');
+  await page.waitForSelector('#web-landing');
+  await page.click('#web-landing .lp-head [data-lp=login]');
   await page.waitForSelector('#web-form');
   assert.equal(await page.locator('#w-code').count(), 0, 'plus de configuration initiale, simple connexion');
   await page.fill('#w-email', 'nathan@test.fr'); await page.fill('#w-pass', 'mauvais'); await page.click('#web-form button');

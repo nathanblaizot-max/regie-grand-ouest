@@ -32,12 +32,14 @@ const head = `<!doctype html>
 <meta name="theme-color" content="#023047">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Régie">
+<meta name="description" content="Régie : devis, factures, stock, clients et caisse d’évènement pour les loueurs de matériel. Sur téléphone et ordinateur.">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon-192.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>:root{color-scheme:light;padding-block:env(safe-area-inset-top,0px) env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
+<script src="/landing.js"></script>
 <script src="/web.js"></script>
 `;
 fs.mkdirSync(new URL('../public', import.meta.url), { recursive: true });

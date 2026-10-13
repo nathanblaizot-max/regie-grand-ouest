@@ -18,3 +18,8 @@
   for = "/web.js"
   [headers.values]
     Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/landing.js"
+  [headers.values]
+    Cache-Control = "no-cache"
