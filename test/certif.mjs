@@ -18,6 +18,7 @@ try {
     await db.collection('clients').doc('c1').set({ nom: 'Martin', type: 'particulier' });
     await db.collection('materiel').doc('m1').set({ nom: 'Chapiteau 5x8', categorie: 'Structures gonflables', prix: 300, stock: 2, unite: 'location' });
     await db.collection('materiel').doc('m2').set({ nom: 'Table', categorie: 'Mobilier', prix: 10, stock: 5, unite: 'location' });
+    await db.collection('materiel').doc('m3').set({ nom: 'Mascotte Lion', categorie: 'Mascotte', prix: 80, stock: 1, unite: 'location' });
     const lg = [{ materielId: 'm1', designation: 'Chapiteau 5x8', qte: 1, puHT: 300, tva: 20 }, { materielId: 'm2', designation: 'Table', qte: 2, puHT: 10, tva: 20 }];
     await db.collection('documents').doc('dv').set({ type: 'devis', numero: 'D-1', clientId: 'c1', clientSnap: { nom: 'Martin' }, societeSnap: { nom: 'GO' }, lignes: lg, totaux: { ht: 320, ttc: 384, detail: [{ taux: 20, montant: 64 }] }, regimeTva: 'normal', statut: 'envoye', dateEmission: '2026-10-01', dateValidite: '2026-12-01', dateDebut: '2026-11-01', dateFin: '2026-11-02', titre: 'Fête' });
   });
@@ -34,14 +35,22 @@ try {
   await page.setInputFiles('input[data-m-cert]', SP + '/cert-test.pdf');
   await page.locator('#m-cert').getByText('cert-test.pdf').waitFor();
   await page.click('[data-action="save-materiel"]');
-  await page.waitForSelector('.chip:has-text("Certificat")');
+  await page.waitForSelector('.chip:text-is("Certificat")');
   const meta = await page.evaluate(async () => { const db = await window.claude.use('db'); return await new Promise(r => { const u = db.collection('materiel').doc('m1').onSnapshot(s => { r(s.data()); }); }); });
   assert.equal(meta.certNom, 'cert-test.pdf'); assert.ok(meta.certTaille > 10); assert.equal(meta.prix, 300);
   const cd = await page.evaluate(async () => { const db = await window.claude.use('db'); return await new Promise(r => { db.collection('certifs').doc('m1').onSnapshot(s => r(s.data())); }); });
   assert.ok(cd.data.startsWith('data:application/pdf'), 'data url pdf');
   // devis : section certificats (uniquement m1)
+  // mascotte : notice d'utilisation
+  await page.click('[data-action="edit-materiel"]:has-text("Mascotte")');
+  await page.getByText("Notice d'utilisation (PDF)").waitFor();
+  assert.ok(await page.locator('#m-cert-wrap').isVisible());
+  await page.setInputFiles('input[data-m-cert]', SP + '/cert-test.pdf');
+  await page.locator('#m-cert').getByText('cert-test.pdf').waitFor();
+  await page.click('[data-action="save-materiel"]');
+  await page.waitForSelector('.chip:has-text("Notice")');
   await page.click('nav.nav button:has-text("Devis et factures")'); await page.click('text=D-1');
-  await page.getByText('Pièces à joindre au devis sur demande').waitFor();
+  await page.getByText('Documents à joindre').waitFor();
   assert.equal(await page.locator('[data-action="cert-dl"]').count(), 1);
   const dlp = page.waitForEvent('download');
   await page.click('[data-action="cert-dl"]');
@@ -54,7 +63,7 @@ try {
   await page.click('[data-action="edit-materiel"]:has-text("Chapiteau")');
   await page.click('[data-action="m-cert-del"]'); await page.getByText('Ajouter le certificat').waitFor();
   await page.click('[data-action="save-materiel"]');
-  await page.waitForFunction(() => !document.querySelector('.chip[title^="Certificat"]'));
+  await page.waitForFunction(() => ![...document.querySelectorAll('.chip')].some(c => c.textContent.trim() === 'Certificat'));
   const gone = await page.evaluate(async () => { const db = await window.claude.use('db'); return await new Promise(r => { db.collection('certifs').doc('m1').onSnapshot(s => r(s.exists)); }); });
   assert.equal(gone, false);
   assert.deepEqual(errs, []);

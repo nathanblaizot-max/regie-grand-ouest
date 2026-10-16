@@ -1062,14 +1062,18 @@ function downloadTour(id){
 
 /* --- Certificats de conformité (PDF par article) --- */
 var CERT_MAX=1000000;
+function certKind(cat){cat=String(cat||'');if(/mascotte/i.test(cat))return {k:'notice',lbl:'Notice d\'utilisation',court:'Notice',art:'la notice',hint:'Pour les mascottes.'};if(/gonflable|toboggan|parcours/i.test(cat))return {k:'cert',lbl:'Certificat de conformité de la structure',court:'Certificat',art:'le certificat',hint:'Pour les structures gonflables, toboggans et parcours.'};return null;}
+function certKindM(m){return certKind(m&&m.categorie)||{k:'cert',lbl:'Certificat de conformité',court:'Certificat',art:'le certificat',hint:''};}
+function certCatNow(m){var el=document.getElementById('m-cat');return el?el.value:(m&&m.categorie);}
 function certBlock(m){
   var dr=S.certDraft,nom=null,taille=0;
   if(dr&&dr!=='del'){nom=dr.nom;taille=dr.taille;}else if(dr!=='del'&&m&&m.certNom){nom=m.certNom;taille=m.certTaille||0;}
   var inp='<input type="file" accept="application/pdf,.pdf" hidden data-m-cert="1">';
-  if(!nom)return '<label class="btn btn-sm" style="cursor:pointer">'+ic('plus')+'Ajouter le certificat (PDF)'+inp+'</label><div class="small muted" style="margin-top:6px">Pour les structures gonflables, toboggans et parcours. PDF de 1 Mo maximum, joignable au devis sur demande.</div>';
+  var kd=certKind(certCatNow(m))||certKindM(m);
+  if(!nom)return '<label class="btn btn-sm" style="cursor:pointer">'+ic('plus')+'Ajouter '+kd.art+' (PDF)'+inp+'</label><div class="small muted" style="margin-top:6px">'+kd.hint+' PDF de 1 Mo maximum, joignable au devis sur demande.</div>';
   return '<div class="row" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="chip info">PDF</span><b style="min-width:0;overflow-wrap:anywhere">'+esc(nom)+'</b><span class="small muted">'+Math.max(1,Math.round(taille/1024))+' Ko'+(dr&&dr!=='del'?' · à enregistrer':'')+'</span></div><div class="toolbar" style="margin:6px 0 0"><label class="btn btn-sm" style="cursor:pointer">Remplacer'+inp+'</label><button class="btn btn-sm btn-danger" type="button" data-action="m-cert-del">Retirer</button></div>';
 }
-function certVisible(cat){var m=S.draft||{};return /gonflable|toboggan|parcours/i.test(String(cat||''))||!!m.certNom||!!(S.certDraft&&S.certDraft!=='del');}
+function certVisible(cat){var m=S.draft||{};return !!certKind(cat)||!!m.certNom||!!(S.certDraft&&S.certDraft!=='del');}
 function certRefresh(){var el=document.getElementById('m-cert');if(el)el.innerHTML=certBlock(S.draft);}
 function certPick(files){
   var f=files&&files[0];if(!f)return;
@@ -1091,11 +1095,11 @@ function certDl(mid){
   var done=false,un=null;
   un=S.db.collection('certifs').doc(mid).onSnapshot(function(s){
     if(done)return;done=true;setTimeout(function(){if(un)un();},0);
-    if(!s||!s.exists){toast('Certificat introuvable.');return;}
-    var blob;try{blob=certDataBlob(s.data().data);}catch(e){toast('Certificat illisible.');return;}
+    if(!s||!s.exists){toast('Document introuvable.');return;}
+    var blob;try{blob=certDataBlob(s.data().data);}catch(e){toast('Document illisible.');return;}
     var fn=String((m&&m.certNom)||'certificat').replace(/[^\w.\-]+/g,'-');if(!/\.pdf$/i.test(fn))fn+='.pdf';
-    S.dl.save({filename:fn,data:blob}).then(function(){toast('Certificat enregistré');}).catch(function(e){if(e&&e.code!=='declined')toast('Téléchargement impossible.');});
-  },function(){done=true;toast('Certificat introuvable.');});
+    S.dl.save({filename:fn,data:blob}).then(function(){toast('Document enregistré');}).catch(function(e){if(e&&e.code!=='declined')toast('Téléchargement impossible.');});
+  },function(){done=true;toast('Document introuvable.');});
 }
 function certsDoc(d){
   var seen={},out=[];
@@ -1104,8 +1108,8 @@ function certsDoc(d){
 }
 function certsDocHtml(d){
   var l=certsDoc(d);if(!l.length)return '';
-  return '<div class="card" style="margin-top:12px"><b>Certificats de conformité</b><div class="small muted" style="margin-bottom:6px">Pièces à joindre au devis sur demande du client.</div>'
-   +l.map(function(m){return '<div class="list-row" style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:4px 0"><span style="min-width:0;overflow-wrap:anywhere"><b>'+esc(m.nom)+'</b> <span class="small muted">'+esc(m.certNom)+'</span></span><button class="btn btn-sm" type="button" data-action="cert-dl" data-id="'+esc(m.id)+'">'+ic('dl')+'Enregistrer le PDF</button></div>';}).join('')+'</div>';
+  return '<div class="card" style="margin-top:12px"><b>Documents à joindre</b><div class="small muted" style="margin-bottom:6px">Certificats de conformité et notices, à joindre au devis sur demande du client.</div>'
+   +l.map(function(m){return '<div class="list-row" style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:4px 0"><span style="min-width:0;overflow-wrap:anywhere"><b>'+esc(m.nom)+'</b> <span class="small muted">'+certKindM(m).court+' · '+esc(m.certNom)+'</span></span><button class="btn btn-sm" type="button" data-action="cert-dl" data-id="'+esc(m.id)+'">'+ic('dl')+'Enregistrer le PDF</button></div>';}).join('')+'</div>';
 }
 
 /* --- Tâches et rappels --- */
@@ -1279,7 +1283,7 @@ function materielList(){
   l.forEach(function(m){
     if(m.categorie!==cur){cur=m.categorie;rows+='<tr><td colspan="6" style="background:var(--surface-2);font-family:var(--font-display);font-weight:800">'+esc(cur||'Sans catégorie')+'</td></tr>';}
     var out=reservedMax(m.id,t,t,null),dispo=Math.max(0,dispoInfo(m)-out);
-    rows+='<tr><td><span class="row-click" style="cursor:pointer;font-weight:600" data-action="edit-materiel" data-id="'+m.id+'">'+esc(m.nom)+'</span>'+(m.stockAVerifier?' <span class="chip sun">à renseigner</span>':'')+(m.certNom?' <span class="chip info" title="Certificat de conformité enregistré">Certificat</span>':'')+'</td>'
+    rows+='<tr><td><span class="row-click" style="cursor:pointer;font-weight:600" data-action="edit-materiel" data-id="'+m.id+'">'+esc(m.nom)+'</span>'+(m.stockAVerifier?' <span class="chip sun">à renseigner</span>':'')+(m.certNom?' <span class="chip info" title="Document PDF enregistré">'+certKindM(m).court+'</span>':'')+'</td>'
      +'<td class="num">'+priceLabel(m)+'</td>'
      +'<td class="num"><input class="stock-in" type="number" min="0" step="1" value="'+num(m.stock)+'" data-stock="'+m.id+'" data-f="stock" aria-label="Stock de '+esc(m.nom)+'"></td>'
      +'<td class="num"><input class="stock-in" type="number" min="0" step="1" value="'+num(m.horsService)+'" data-stock="'+m.id+'" data-f="horsService" aria-label="Hors service : '+esc(m.nom)+'"></td>'
@@ -1478,7 +1482,7 @@ function openMateriel(id){
    +'<div class="field"><label for="m-unite">Facturé par</label><input id="m-unite" value="'+esc(m.unite||'location')+'" placeholder="location, week-end, pièce…"></div>'
    +'<div class="field"><label for="m-stock">Quantité en stock</label><input id="m-stock" type="number" min="0" step="1" value="'+num(m.stock)+'"></div>'
    +'<div class="field"><label for="m-hs">Hors service</label><input id="m-hs" type="number" min="0" step="1" value="'+num(m.horsService)+'"></div>'
-   +'<div class="field"><label for="m-caution">Caution (€)</label><input id="m-caution" type="number" min="0" step="1" value="'+(m.caution==null?'':esc(m.caution))+'"></div><div class="field"><label for="m-achat">Coût d\'achat total (€, toutes pièces)</label><input id="m-achat" type="number" min="0" step="0.01" value="'+(m.coutAchat==null?'':esc(m.coutAchat))+'" placeholder="Pour calculer l\'amortissement"></div></div><div class="field"><label for="m-notes">Notes (dimensions, capacité, montage…)</label><textarea id="m-notes">'+esc(m.notes)+'</textarea></div><div class="field" id="m-cert-wrap"'+(certVisible(m.categorie)?'':' hidden')+'><label>Certificat de conformité de la structure (PDF)</label><div id="m-cert">'+certBlock(m)+'</div></div></div>'
+   +'<div class="field"><label for="m-caution">Caution (€)</label><input id="m-caution" type="number" min="0" step="1" value="'+(m.caution==null?'':esc(m.caution))+'"></div><div class="field"><label for="m-achat">Coût d\'achat total (€, toutes pièces)</label><input id="m-achat" type="number" min="0" step="0.01" value="'+(m.coutAchat==null?'':esc(m.coutAchat))+'" placeholder="Pour calculer l\'amortissement"></div></div><div class="field"><label for="m-notes">Notes (dimensions, capacité, montage…)</label><textarea id="m-notes">'+esc(m.notes)+'</textarea></div><div class="field" id="m-cert-wrap"'+(certVisible(m.categorie)?'':' hidden')+'><label id="m-cert-lbl">'+(certKind(m.categorie)||certKindM(m)).lbl+' (PDF)</label><div id="m-cert">'+certBlock(m)+'</div></div></div>'
    +'<div class="modal-f">'+(id?'<button class="btn btn-danger" data-action="del-materiel" style="margin-right:auto">'+(S.confirm==='materiel'?'Confirmer la suppression':'Supprimer')+'</button>':'')+'<button class="btn" data-action="close">Annuler</button><button class="btn btn-primary" data-action="save-materiel">Enregistrer</button></div>');
 }
 function saveMateriel(){
@@ -2342,7 +2346,7 @@ function refreshList(){var list=$('#list');if(!list)return;
   if(S.view==='dossiers')list.innerHTML=dossierList();else if(S.view==='documents')list.innerHTML=docList();else if(S.view==='clients')list.innerHTML=clientList();else if(S.view==='materiel')list.innerHTML=materielList();else if(S.view==='taches')list.innerHTML=tacheList();else if(S.view==='entretien')list.innerHTML=entretienList();}
 document.addEventListener('input',function(e){
   var t=e.target;
-  if(t.id==='m-cat'&&S.modal==='materiel'){var w=document.getElementById('m-cert-wrap');if(w)w.hidden=!certVisible(t.value);return;}
+  if(t.id==='m-cat'&&S.modal==='materiel'){var w=document.getElementById('m-cert-wrap');if(w)w.hidden=!certVisible(t.value);var lb=document.getElementById('m-cert-lbl');if(lb)lb.textContent=((certKind(t.value)||certKindM(S.draft)).lbl)+' (PDF)';certRefresh();return;}
   if(t.dataset&&t.dataset.casse!==undefined&&S.draft&&S.draft.casses){var ci=+t.dataset.casse;if(S.draft.casses[ci])S.draft.casses[ci][t.dataset.k]=t.dataset.k==='montant'?t.value:t.value;return;}
   if(t.id==='c-mont'||t.id==='c-ret'){cautionResume();return;}
   if(t.dataset&&t.dataset.tf==='nom'&&S.modal==='tour'){S.draft.nom=t.value;return;}
