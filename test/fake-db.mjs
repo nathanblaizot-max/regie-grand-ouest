@@ -7,7 +7,11 @@ export function makeFakeDb() {
   async function run(text, v) {
     const t = norm(text);
     if (t.startsWith("INSERT INTO meta")) { if (!meta.has('secret')) meta.set('secret', v[0]); return []; }
+    if (t.startsWith("SELECT v FROM meta WHERE k = ?")) return meta.has(v[0]) ? [{ v: meta.get(v[0]) }] : [];
     if (t.startsWith("SELECT v FROM meta")) return [{ v: meta.get('secret') }];
+    if (t.startsWith("SELECT coalesce(sum(")) return [{ n: String([...docs.values()].filter((d) => d.tenant === v[0] && (d.col === 'photos' || d.col === 'certifs') && !d.deleted).reduce((a, d) => a + (d.data._size != null ? d.data._size : JSON.stringify(d.data).length), 0)) }];
+    if (t.startsWith("SELECT id, data FROM docs WHERE tenant = ? AND col = ? AND deleted = false AND id > ?")) { const [tenant, col, after, lim] = v; return [...docs.values()].filter((d) => d.tenant === tenant && d.col === col && !d.deleted && d.id > after).sort((a, b) => (a.id < b.id ? -1 : 1)).slice(0, 15).map((d) => ({ id: d.id, data: d.data })); }
+    if (t.startsWith("SELECT id, data FROM docs WHERE tenant = ? AND col = ? AND deleted = false AND data->>'dossierId'")) { const [tenant, col, dos] = v; return [...docs.values()].filter((d) => d.tenant === tenant && d.col === col && !d.deleted && d.data && d.data.dossierId === dos).slice(0, 60).map((d) => ({ id: d.id, data: d.data })); }
     if (t.startsWith("SELECT count(*)::int AS n FROM users")) return [{ n: users.length }];
     if (t.startsWith("INSERT INTO users (email, name, pass_hash, role)")) { const u = { id: ++uid, tenant: 'main', email: v[0], name: v[1], pass_hash: v[2], role: 'admin', active: true }; users.push(u); return [row(u)]; }
     if (t.startsWith("INSERT INTO users (tenant, email, name, pass_hash, role)")) { const u = { id: ++uid, tenant: v[0], email: v[1], name: v[2], pass_hash: v[3], role: v[4], active: true }; users.push(u); return [row(u)]; }

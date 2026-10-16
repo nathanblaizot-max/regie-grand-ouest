@@ -130,15 +130,26 @@ async function blobsOut(blobs, tenant, col, id, data) {
   // Sort les gros champs vers le stockage ; renvoie les métadonnées + la liste des champs externalisés.
   const out = { ...data };
   const moved = [];
-  for (const k of bigFields(data)) { await blobs.set(bkey(tenant, col, id, k), data[k]); delete out[k]; moved.push(k); }
-  if (moved.length) out._blob = moved;
+  let size = 0;
+  for (const k of bigFields(data)) { await blobs.set(bkey(tenant, col, id, k), data[k]); size += data[k].length; delete out[k]; moved.push(k); }
+  if (moved.length) { out._blob = moved; out._size = size; }
   return out;
 }
 async function blobsIn(blobs, tenant, col, id, data) {
   if (!data || !Array.isArray(data._blob)) return data;
-  const out = { ...data }; delete out._blob;
+  const out = { ...data }; delete out._blob; delete out._size;
   for (const k of data._blob) { const v = await blobs.get(bkey(tenant, col, id, k)); if (v != null) out[k] = v; }
   return out;
+}
+// Espace utilisé par un locataire (photos + PDF) et plafond (octets). Plafond par défaut : opts.quotaMb, modifiable par abonné via meta « quota:<locataire> » (en Mo).
+async function usedBytes(db, tenant) {
+  const r = await db.sql`SELECT coalesce(sum(coalesce((data->>'_size')::bigint, length(data::text))), 0)::text AS n FROM docs WHERE tenant = ${tenant} AND col IN ('photos', 'certifs') AND deleted = false`;
+  return Number(r[0].n);
+}
+async function quotaBytes(db, tenant, opts) {
+  const r = await db.sql`SELECT v FROM meta WHERE k = ${'quota:' + tenant}`;
+  const mb = r.length && Number(r[0].v) > 0 ? Number(r[0].v) : (opts.quotaMb || 1024);
+  return Math.round(mb * 1024 * 1024);
 }
 async function blobsDrop(blobs, tenant, col, id) {
   for (const k of ['data']) { try { await blobs.delete(bkey(tenant, col, id, k)); } catch (e) { /* déjà absent */ } }
@@ -227,6 +238,10 @@ export async function handle(req, db, opts = {}) {
       return J({ docs: docs.map((r) => ({ col: r.col, id: r.id, data: r.data, deleted: r.deleted, seq: Number(r.seq) })), max: mx, more });
     }
 
+    if (path === 'storage' && method === 'GET') {
+      return J({ used: await usedBytes(db, me.tenant), quota: await quotaBytes(db, me.tenant, opts) });
+    }
+
     // Collections lourdes (photos, certificats PDF) : exclues de la synchro, lues à la demande.
     if (path === 'heavy' && method === 'GET') {
       const col = String(url.searchParams.get('col') || '');
@@ -235,6 +250,11 @@ export async function handle(req, db, opts = {}) {
       let rows = [];
       if (id && IDS.test(id)) rows = await db.sql`SELECT id, data FROM docs WHERE tenant = ${me.tenant} AND col = ${col} AND id = ${id} AND deleted = false`;
       else if (col === 'photos' && dos && IDS.test(dos)) rows = await db.sql`SELECT id, data FROM docs WHERE tenant = ${me.tenant} AND col = ${col} AND deleted = false AND data->>'dossierId' = ${dos} LIMIT 60`;
+      else if (url.searchParams.get('all') === '1') { // sauvegarde complète : lecture par pages
+        const after = String(url.searchParams.get('after') || '');
+        if (after && !IDS.test(after)) return J({ error: 'requete' }, 400);
+        rows = await db.sql`SELECT id, data FROM docs WHERE tenant = ${me.tenant} AND col = ${col} AND deleted = false AND id > ${after} ORDER BY id ASC LIMIT 15`;
+      }
       else return J({ error: 'requete' }, 400);
       const out = [];
       for (const r of rows) {
@@ -258,6 +278,14 @@ export async function handle(req, db, opts = {}) {
       for (const o of ops) {
         if (!COLS.test(String(o.col)) || !IDS.test(String(o.id)) || !['set', 'update', 'delete'].includes(o.op)) return J({ error: 'op-invalide' }, 400);
         if (o.op !== 'delete' && (typeof o.data !== 'object' || o.data === null || Array.isArray(o.data) || JSON.stringify(o.data).length > MAX_DOC_BYTES)) return J({ error: 'donnees-invalides' }, 400);
+      }
+      if (opts.blobs) {
+        let add = 0;
+        for (const o of ops) if (o.op !== 'delete' && HEAVY.has(o.col)) for (const k of bigFields(o.data)) add += o.data[k].length;
+        if (add > 0) {
+          const used = await usedBytes(db, me.tenant), quota = await quotaBytes(db, me.tenant, opts);
+          if (used + add > quota) return J({ error: 'quota', used, quota }, 413);
+        }
       }
       for (const o of ops) {
         const t = me.tenant;

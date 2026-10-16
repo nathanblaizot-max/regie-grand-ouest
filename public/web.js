@@ -95,7 +95,7 @@
     epoch++;
     return api('POST', 'write', { ops: ops }).then(function (r) {
       if (r.status === 401) { showLogin(); throw { code: 'non-connecte' }; }
-      if (r.status !== 200) throw { code: r.body && r.body.error || 'erreur' };
+      if (r.status !== 200) throw { code: r.body && r.body.error === 'quota' ? 'quota_exceeded' : (r.body && r.body.error || 'erreur') };
       quiet = 0; setTimeout(sync, 30);
       return r.body;
     }, function () { throw { code: 'hors-ligne' }; });
@@ -119,7 +119,7 @@
   function docRef(col, id) {
     return {
       id: id,
-      set: function (data) { localApply(col, id, 'set', data); return write([{ op: 'set', col: col, id: id, data: data }]); },
+      set: function (data) { localApply(col, id, 'set', data); return write([{ op: 'set', col: col, id: id, data: data }]).catch(function (e) { if (HEAVY[col]) localApply(col, id, 'delete'); throw e; }); },
       update: function (data) { localApply(col, id, 'update', data); return write([{ op: 'update', col: col, id: id, data: data }]); },
       delete: function () { localApply(col, id, 'delete'); return write([{ op: 'delete', col: col, id: id }]); },
       onSnapshot: function (ok, err) {
@@ -152,6 +152,17 @@
           };
         },
         doc: function (id) { return docRef(col, id || newId()); },
+        get: function () { // lecture complète (sauvegarde) : par pages pour les collections lourdes
+          if (!HEAVY[col]) return Promise.resolve(snapCol(col));
+          var all = [];
+          var page = function (after) {
+            return heavyGet('col=' + col + '&all=1&after=' + encodeURIComponent(after)).then(function (docs) {
+              all = all.concat(docs);
+              return docs.length >= 15 ? page(docs[docs.length - 1].id) : { docs: all.map(function (d) { return { id: d.id, data: function () { return d.data; } }; }) };
+            });
+          };
+          return page('');
+        },
         onSnapshot: function (ok, err) {
           (colCbs[col] = colCbs[col] || []).push({ ok: ok, err: err });
           if (loaded) setTimeout(function () { ok(snapCol(col)); }, 0);
@@ -301,12 +312,23 @@
     });
   }
   function logout() { api('POST', 'logout', {}).then(function () { location.reload(); }); }
+  function fmtMo(n) { return n >= 1073741824 ? (n / 1073741824).toFixed(1).replace('.', ',') + ' Go' : Math.max(0.1, n / 1048576).toFixed(n < 10485760 ? 1 : 0).replace('.', ',') + ' Mo'; }
+  function storageLine() {
+    var el = document.getElementById('web-storage'); if (!el) return;
+    api('GET', 'storage').then(function (r) {
+      if (r.status !== 200 || !el.isConnected) return;
+      var p = Math.min(100, Math.round(100 * r.body.used / r.body.quota));
+      el.innerHTML = 'Espace photos et PDF : <b>' + fmtMo(r.body.used) + '</b> utilisés sur ' + fmtMo(r.body.quota) + ' (' + p + ' %)' +
+        '<div style="height:6px;border-radius:3px;background:var(--line,#dde3e8);margin-top:5px;overflow:hidden"><div style="height:100%;width:' + p + '%;background:' + (p > 90 ? 'var(--bad,#c0392b)' : 'var(--primary,#023047)') + '"></div></div>';
+    }, function () {});
+  }
   function card() {
     if (!me) return '';
+    setTimeout(storageLine, 80);
     return '<h3>Compte</h3><div class="card card-pad" style="display:grid;gap:10px"><div>Connecté en tant que <b>' + esc(me.name || me.email) + '</b> <span class="muted small">(' + esc(me.email) + ' · ' + (me.role === 'admin' ? 'administrateur' : 'utilisateur') + ')</span></div>' +
       '<div class="toolbar" style="margin:0"><button class="btn btn-sm" data-action="web-password">Changer mon mot de passe</button>' +
       (me.role === 'admin' ? '<button class="btn btn-sm" data-action="web-accounts">Gérer les comptes</button><button class="btn btn-sm" data-action="web-import">Importer des données</button>' : '') +
-      '<button class="btn btn-sm" data-action="web-logout">Se déconnecter</button></div></div>';
+      '<button class="btn btn-sm" data-action="web-logout">Se déconnecter</button></div><div id="web-storage" class="small muted"></div></div>';
   }
 
   var WEB = window.WEB = { user: null, card: card, accounts: accounts, password: changePassword, logout: logout, importData: importData };

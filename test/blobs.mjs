@@ -1,7 +1,7 @@
 // Fichiers externalisés : photos et PDF sortent de la base, reviennent intacts, sont supprimés avec leur ligne.
 import assert from 'node:assert/strict';
 import { startServer } from './dev-server.mjs';
-const { server, db, files, port } = await startServer();
+const { server, db, files, port } = await startServer(0, true, 0.2); // plafond 0,2 Mo
 const base = 'http://127.0.0.1:' + port + '/api/';
 let cookie = '';
 const call = async (m, p, b) => { const r = await fetch(base + p, { method: m, headers: { 'content-type': 'application/json', 'x-requested-with': 'regie', cookie }, body: b ? JSON.stringify(b) : undefined }); const sc = r.headers.get('set-cookie'); if (sc) cookie = sc.split(';')[0]; return { status: r.status, json: await r.json() }; };
@@ -41,5 +41,14 @@ try {
   // 6. la synchro ne contient toujours ni photos ni certificats
   const sync = (await call('GET', 'sync?since=0')).json.docs;
   assert.ok(sync.every((d) => d.col !== 'photos' && d.col !== 'certifs'));
+  // 7. espace utilisé / plafond, refus au-delà, lecture par pages pour la sauvegarde
+  let st = (await call('GET', 'storage')).json; assert.equal(st.used, big.length); assert.equal(st.quota, Math.round(0.2 * 1048576));
+  const r413 = await call('POST', 'write', { ops: [{ op: 'set', col: 'photos', id: 'p9', data: { dossierId: 'd3', data: 'data:image/jpeg;base64,' + 'D'.repeat(190000) } }] });
+  assert.equal(r413.status, 413); assert.equal(r413.json.error, 'quota'); assert.equal(files.size, 1, 'rien d\'écrit au-delà du plafond');
+  db._docs.get('main|photos|old').deleted = true; await call('POST', 'write', { ops: [] }).catch(() => {});
+  for (let i = 0; i < 20; i++) await call('POST', 'write', { ops: [{ op: 'set', col: 'photos', id: 'q' + String(i).padStart(2, '0'), data: { dossierId: 'd4', data: 'data:image/jpeg;base64,' + 'E'.repeat(2500), ts: i } }] });
+  let all = [], after = '';
+  for (;;) { const pg = (await call('GET', 'heavy?col=photos&all=1&after=' + after)).json.docs; all = all.concat(pg); if (pg.length < 15) break; after = pg[pg.length - 1].id; }
+  assert.equal(all.length, 20); assert.ok(all.every((d) => d.data.data.length > 2500 && !d.data._blob));
   console.log('OK fichiers externalisés');
 } catch (e) { console.error('ÉCHEC', e); process.exitCode = 1; } finally { server.close(); }

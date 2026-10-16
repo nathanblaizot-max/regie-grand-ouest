@@ -12,6 +12,6 @@ const blobs = {
   delete: (k: string) => files.delete(k),
 };
 
-export default async (req: Request) => handle(req, getDatabase(), { setupCode: SETUP_CODE, blobs });
+export default async (req: Request) => handle(req, getDatabase(), { setupCode: SETUP_CODE, blobs, quotaMb: Number(Netlify.env.get("STORAGE_QUOTA_MB")) || 1024 });
 
 export const config: Config = { path: "/api/*" };

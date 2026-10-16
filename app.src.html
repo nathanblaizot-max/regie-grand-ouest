@@ -1319,11 +1319,11 @@ function xlCrc(b){
   if(!XL_CRC){XL_CRC=[];for(var n=0;n<256;n++){var c=n;for(var k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;XL_CRC[n]=c>>>0;}}
   var c=0xFFFFFFFF;for(var i=0;i<b.length;i++)c=XL_CRC[(c^b[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0;
 }
-function xlZip(files){
+function xlZip(files,mime){
   var enc=new TextEncoder(),parts=[],cen=[],off=0;
   function u16(n){return [n&255,(n>>8)&255];}function u32(n){return [n&255,(n>>8)&255,(n>>16)&255,(n>>>24)&255];}
   files.forEach(function(f){
-    var nb=enc.encode(f.name),d=enc.encode(f.data),crc=xlCrc(d);
+    var nb=enc.encode(f.name),d=typeof f.data==='string'?enc.encode(f.data):f.data,crc=xlCrc(d);
     var lh=[].concat(u32(0x04034b50),u16(20),u16(0x0800),u16(0),u16(0),u16(0x21),u32(crc),u32(d.length),u32(d.length),u16(nb.length),u16(0));
     parts.push(new Uint8Array(lh),nb,d);
     cen.push([].concat(u32(0x02014b50),u16(20),u16(20),u16(0x0800),u16(0),u16(0),u16(0x21),u32(crc),u32(d.length),u32(d.length),u16(nb.length),u16(0),u16(0),u16(0),u16(0),u32(0),u32(off)),nb);
@@ -1331,7 +1331,7 @@ function xlZip(files){
   });
   var cs=off,cl=0;cen.forEach(function(c){var a=c instanceof Uint8Array?c:new Uint8Array(c);parts.push(a);cl+=a.length;});
   parts.push(new Uint8Array([].concat(u32(0x06054b50),u16(0),u16(0),u16(files.length),u16(files.length),u32(cl),u32(cs),u16(0))));
-  return new Blob(parts,{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  return new Blob(parts,{type:mime||'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
 }
 function xlBook(sheets){
   var ct='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'+sheets.map(function(s,i){return '<Override PartName="/xl/worksheets/sheet'+(i+1)+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>';}).join('')+'</Types>';
@@ -1440,6 +1440,34 @@ function ikXlsx(){
   var blob;try{blob=ikBook(v,y);}catch(e){blob=null;}
   if(!blob){toast('Le fichier n\'a pas pu être généré.');return;}
   S.dl.save({filename:'Indemnites-km-'+String(v.nom).replace(/[^\w\-]+/g,'-').slice(0,30)+'-'+y+'.xlsx',data:blob}).then(function(){toast('Fichier enregistré');}).catch(function(e){if(e&&e.code!=='declined')toast('Téléchargement impossible.');});
+}
+
+/* --- Sauvegarde complète (ZIP : données + photos + PDF) --- */
+function dataUrlBytes(u){var m=/^data:([^;,]*)(;base64)?,(.*)$/.exec(String(u||''));if(!m||!m[2])return null;try{var b=atob(m[3]),a=new Uint8Array(b.length);for(var i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a;}catch(e){return null;}}
+function bkName(s){return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\w.\-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60)||'fichier';}
+function bkRead(col){try{return S.db.collection(col).get().then(function(snap){return snap.docs.map(function(d){var o=d.data()||{};return {id:d.id,d:o};});});}catch(e){return Promise.reject(e);}}
+function backupAll(){
+  if(!S.dl){toast('Le téléchargement n\'est pas disponible dans cette vue.');return;}
+  if(S.bkBusy)return;S.bkBusy=true;toast('Préparation de la sauvegarde…');
+  var files=[],notes=[];
+  function j(n,v){files.push({name:n,data:JSON.stringify(v,null,1)});}
+  j('donnees/societe.json',S.set);
+  [['materiel',S.materiel],['clients',S.clients],['locations',S.dossiers],['documents',S.documents],['caisses',S.caisses],['taches',S.taches],['entretiens',S.entretiens],['tournees',S.tournees],['camions',S.vehicules],['indemnites_km',S.ikjours]].forEach(function(c){j('donnees/'+c[0]+'.json',c[1]||[]);});
+  var dosNom={};(S.dossiers||[]).forEach(function(d){dosNom[d.id]=bkName(d.numero||d.id);});
+  var matNom={};(S.materiel||[]).forEach(function(m){matNom[m.id]=bkName(m.nom);});
+  var nPh=0,nPdf=0;
+  bkRead('photos').then(function(l){
+    l.sort(function(a,b){return (a.d.ts||0)-(b.d.ts||0);});
+    l.forEach(function(p,i){var by=dataUrlBytes(p.d.data);if(by){nPh++;files.push({name:'photos/'+(dosNom[p.d.dossierId]||bkName(p.d.dossierId))+'/'+(p.d.phase||'edl')+'-'+(i+1)+'.jpg',data:by});}});
+  }).catch(function(){notes.push('Les photos des états des lieux n\'ont pas pu être lues : refaire la sauvegarde pour les inclure.');}).then(function(){
+    return bkRead('certifs').then(function(l){
+      l.forEach(function(c){var by=dataUrlBytes(c.d.data);if(by){nPdf++;files.push({name:'pdf/'+(matNom[c.id]||bkName(c.id))+'-'+bkName(c.d.nom||'document.pdf').replace(/(\.pdf)?$/i,'.pdf'),data:by});}});
+    }).catch(function(){notes.push('Les PDF (certificats, notices) n\'ont pas pu être lus : refaire la sauvegarde pour les inclure.');});
+  }).then(function(){
+    files.unshift({name:'LISEZMOI.txt',data:'Sauvegarde complète du '+fmtD(today())+'.\r\n\r\ndonnees/ : toutes les informations (fichiers .json lisibles par un logiciel ou importables).\r\nphotos/ : photos des états des lieux, classées par dossier ('+nPh+').\r\npdf/ : certificats de conformité et notices ('+nPdf+').\r\n'+(notes.length?'\r\nATTENTION : '+notes.join(' ')+'\r\n':'')});
+    var blob=xlZip(files,'application/zip');
+    return S.dl.save({filename:'sauvegarde-'+today()+'.zip',data:blob});
+  }).then(function(){toast('Sauvegarde enregistrée');}).catch(function(e){if(e&&e.code!=='declined')toast('Sauvegarde impossible.');}).then(function(){S.bkBusy=false;});
 }
 
 /* --- Tâches et rappels --- */
@@ -1776,7 +1804,7 @@ function vReglages(){
    +'<div class="field"><label for="s-cgv">Conditions générales de location (CGV, ajoutées en dernière page des devis et du contrat)</label><textarea id="s-cgv" rows="8" placeholder="Objet, durée, retrait et restitution, caution, responsabilité, annulation, litiges…">'+esc(s.cgv||'')+'</textarea></div>'
    +'<div class="field"><label for="s-mediateur">Médiateur de la consommation (nom, adresse, site : affiché sur les devis et factures)</label><textarea id="s-mediateur" rows="3" placeholder="Nom du médiateur, adresse postale, site internet">'+esc(s.mediateur||'')+'</textarea></div>'
    +'<div class="field"><label for="s-rib">Coordonnées de paiement (affichées sur les factures)</label><textarea id="s-rib" placeholder="IBAN, BIC, ordre du chèque…">'+esc(s.rib)+'</textarea></div>'
-   +'<div class="toolbar" style="margin:0"><button class="btn" data-action="export">'+ic('dl')+'Exporter toutes les données (JSON)</button></div></div>';
+   +'<div class="toolbar" style="margin:0"><button class="btn" data-action="export">'+ic('dl')+'Exporter les données (JSON)</button><button class="btn btn-primary" data-action="backup">'+ic('dl')+'Sauvegarde complète (ZIP avec photos et PDF)</button></div></div>';
   return h;
 }
 
@@ -2666,7 +2694,8 @@ var A={
     var g=function(k){return $('#s-'+k).value;};
     var o={emailComptable:g('emailComptable').trim(),nom:g('nom').trim(),adresse:g('adresse').trim(),tel:g('tel').trim(),email:g('email').trim(),siret:g('siret').trim(),tvaNumero:g('tvaNumero').trim(),forme:g('forme').trim(),capital:g('capital').trim(),rcsVille:g('rcsVille').trim(),tvaDebits:g('tvaDebits'),regimeTva:g('regimeTva'),tvaDefaut:num(g('tvaDefaut')),prixCatalogue:g('prixCatalogue'),tarifKm:Math.max(0,num(g('tarifKm'))),acomptePct:Math.min(100,Math.max(0,num(g('acomptePct')))),delaiPaiement:Math.max(0,Math.round(num(g('delaiPaiement')))),validiteDevis:Math.max(1,Math.round(num(g('validiteDevis')))),penalites:g('penalites').trim(),conditions:g('conditions').trim(),cgv:g('cgv').trim(),mediateur:g('mediateur').trim(),modCaution:g('modCaution'),modEdl:g('modEdl'),rib:g('rib').trim()};
     S.db.doc('config/societe').set(Object.assign({},S.set,o)).then(function(){toast('Réglages enregistrés');}).catch(dbErr);},
-  export:exportData
+  export:exportData,
+  backup:backupAll
 };
 document.addEventListener('click',function(e){
   var t=e.target.closest('[data-action]');if(!t)return;
