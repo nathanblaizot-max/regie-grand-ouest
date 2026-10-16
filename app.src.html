@@ -1062,7 +1062,7 @@ function downloadTour(id){
 
 /* --- Certificats de conformité (PDF par article) --- */
 var CERT_MAX=1000000;
-function certKind(cat){cat=String(cat||'');if(/mascotte/i.test(cat))return {k:'notice',lbl:'Notice d\'utilisation',court:'Notice',art:'la notice',hint:'Pour les mascottes.'};if(/gonflable|toboggan|parcours/i.test(cat))return {k:'cert',lbl:'Certificat de conformité de la structure',court:'Certificat',art:'le certificat',hint:'Pour les structures gonflables, toboggans et parcours.'};return null;}
+function certKind(cat){cat=String(cat||'');if(/mascotte/i.test(cat))return {k:'notice',lbl:'Notice d\'utilisation',court:'Notice',art:'la notice',hint:'Pour les mascottes.'};if(/gonflable|toboggan|parcours|sportif|loisir/i.test(cat))return {k:'cert',lbl:'Certificat de conformité de la structure',court:'Certificat',art:'le certificat',hint:'Pour les structures gonflables, toboggans, parcours et jeux sportifs et loisirs.'};return null;}
 function certKindM(m){return certKind(m&&m.categorie)||{k:'cert',lbl:'Certificat de conformité',court:'Certificat',art:'le certificat',hint:''};}
 function certCatNow(m){var el=document.getElementById('m-cat');return el?el.value:(m&&m.categorie);}
 function certBlock(m){

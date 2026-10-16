@@ -26,7 +26,7 @@ try {
   await page.click('[data-action="edit-materiel"]:has-text("Chapiteau")');
   await page.getByText('Certificat de conformité de la structure').waitFor();
   await page.fill('#m-cat', 'Mobilier'); assert.equal(await page.locator('#m-cert-wrap').isHidden(), true, 'masqué hors gonflables');
-  for (const c of ['Toboggans', 'Parcours enfants', 'Structures gonflables']) { await page.fill('#m-cat', c); assert.equal(await page.locator('#m-cert-wrap').isVisible(), true, c); }
+  for (const c of ['Toboggans', 'Parcours enfants', 'Jeux sportifs et loisirs', 'Structures gonflables']) { await page.fill('#m-cat', c); assert.equal(await page.locator('#m-cert-wrap').isVisible(), true, c); }
   // fichier trop lourd refusé
   await page.setInputFiles('input[data-m-cert]', SP + '/gros.pdf');
   await page.getByText('PDF trop lourd').waitFor();
