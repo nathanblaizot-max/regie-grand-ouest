@@ -1,0 +1,94 @@
+import { createRequire } from 'node:module';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { startServer } from './dev-server.mjs';
+const require = createRequire('/opt/node22/lib/node_modules/');
+const { chromium } = require('playwright');
+const { server, port } = await startServer();
+const browser = await chromium.launch({ args: ['--no-sandbox'] });
+const errs = [];
+const TINY = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+try {
+  const ctx = await browser.newContext({ viewport: { width: 400, height: 860 }, acceptDownloads: true });
+  const page = await ctx.newPage();
+  page.on('pageerror', e => errs.push(e.message));
+  await page.addInitScript(() => {
+    window.__txt = [];
+    const J = function () { return new Proxy({}, { get: (t, k) => k === 'text' ? (s) => window.__txt.push(String(s)) : k === 'splitTextToSize' ? (s) => [String(s)] : k === 'output' ? () => new Blob(['x']) : k === 'internal' ? { pageSize: { getWidth: () => 210, getHeight: () => 297 } } : (() => ({ finalY: 100 })), set: () => true }); }; J.API = { autoTable() {} };
+    window.jspdf = { jsPDF: J };
+  });
+  await page.goto('http://127.0.0.1:' + port + '/'); await page.waitForSelector('#web-form');
+  await page.fill('#w-code', 'TESTCODE'); await page.fill('#w-name', 'N'); await page.fill('#w-email', 'n@t.fr'); await page.fill('#w-pass', 'motdepasse1');
+  await page.click('#web-form button'); await page.waitForSelector('nav.nav button');
+  await page.evaluate(async () => {
+    const db = await window.claude.use('db');
+    const f = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+    window.__f = f;
+    await db.doc('config/societe').set({ nom: 'Grand Ouest Locations', adresse: '1 rue du Dépôt, 50000 Saint-Lô', emailComptable: 'compta@ex.fr' });
+    await db.collection('clients').doc('c1').set({ nom: 'Martin Paul', tel: '0611223344', type: 'particulier' });
+    await db.collection('materiel').doc('m1').set({ nom: 'Château gonflable', prix: 100, stock: 3, horsService: 0, caution: 50, coutAchat: 500, unite: 'location' });
+    await db.collection('entretiens').doc('e1').set({ materielId: 'm1', type: 'panne', date: f(-5), cout: 40, statut: 'clos', qteHS: 1 });
+    const lg = [{ materielId: 'm1', designation: 'Château gonflable', qte: 2, puHT: 100, tva: 20 }];
+    await db.collection('dossiers').doc('dA').set({ titre: 'Fête A', statut: 'confirmee', clientId: 'c1', dateDebut: f(1), dateFin: f(2), lieu: '5 rue des Lilas, Coutances', lignes: lg });
+    await db.collection('dossiers').doc('dB').set({ titre: 'Fête B', statut: 'confirmee', clientId: 'c1', dateDebut: f(1), dateFin: f(3), lieu: '9 place du Marché, Granville', lignes: lg });
+    await db.collection('dossiers').doc('dC').set({ titre: 'Fête passée', statut: 'terminee', clientId: 'c1', dateDebut: f(-3), dateFin: f(-1), lignes: lg, caution: { montant: 100, statut: 'versee', dateRecu: f(-3), mode: 'Espèces' } });
+    const tot = { ht: 200, ttc: 240, detail: [{ taux: 20, montant: 40 }] };
+    const mkf = (id, n, o) => db.collection('documents').doc(id).set(Object.assign({ type: 'facture', numero: n, statut: 'emise', clientId: 'c1', clientSnap: { nom: 'Martin Paul' }, societeSnap: { nom: 'GO' }, dossierId: 'dC', lignes: lg, totaux: tot, regimeTva: 'normal', dateEmission: f(0), dateEcheance: f(30) }, o));
+    await mkf('f1', 'F-2026-0001', {}); await mkf('f2', 'F-2026-0002', { statut: 'payee', datePaiement: f(0), modePaiement: 'Virement' });
+  });
+  // alertes caution
+  await page.getByText('Caution à restituer').first().waitFor();
+  await page.getByText('Caution à encaisser avant la livraison').first().waitFor();
+  // caution : restitution avec casse
+  await page.locator('.list-row:has-text("Caution à restituer") [data-action="open-edl"]').click();
+  await page.waitForSelector('#c-mont');
+  assert.equal(await page.inputValue('#c-mont'), '100');
+  await page.click('[data-action="edl-casse-add"]');
+  await page.fill('[data-casse="0"][data-k="designation"]', 'Valve cassée');
+  await page.fill('[data-casse="0"][data-k="montant"]', '30');
+  await page.click('[data-action="edl-retenir"]');
+  assert.equal(await page.inputValue('#c-ret'), '30');
+  await page.setInputFiles('[data-edl-photo="retour"]', { name: 'p.png', mimeType: 'image/png', buffer: TINY });
+  await page.waitForSelector('#edl-ph-retour img');
+  await page.click('[data-action="edl-pdf"]'); await page.waitForTimeout(500);
+  const t = await page.evaluate(() => window.__txt);
+  assert.ok(t.includes('ÉTAT DES LIEUX') && t.some(x => x.includes('Retenue : 30,00')) && t.some(x => x.includes('Valve cassée')), JSON.stringify(t));
+  await page.click('[data-action="edl-caution"][data-st="rendue"]');
+  await page.waitForSelector('text=Restituée le');
+  const dc = await page.evaluate(async () => { const r = await (await fetch('/api/sync?since=0&limit=500')).json(); return { d: r.docs.find(x => x.id === 'dC').data, ph: r.docs.filter(x => x.col === 'photos').map(x => x.data.data.slice(0, 23) + '|' + x.data.phase + '|' + x.data.dossierId) }; });
+  assert.equal(dc.d.caution.statut, 'rendue'); assert.equal(dc.d.caution.retenue, 30);
+  assert.equal(dc.d.edl.retour.casses[0].designation, 'Valve cassée'); assert.equal(dc.d.lignes.length, 1);
+  assert.deepEqual(dc.ph, ['data:image/jpeg;base64,|retour|dC']);
+  await page.locator('.modal-f [data-action="close"]').click();
+  // modifier une location ne détruit pas la caution
+  await page.click('nav.nav button:has-text("Locations")');
+  await page.click('text=Fête passée'); await page.click('[data-action="save-dossier"]'); await page.waitForTimeout(500);
+  const keep = await page.evaluate(async () => (await (await fetch('/api/sync?since=0&limit=500')).json()).docs.find(x => x.id === 'dC').data.caution.statut);
+  assert.equal(keep, 'rendue', 'caution conservée à l\'enregistrement de la location');
+  // statistiques + rentabilité + export
+  await page.click('nav.nav button:has-text("Statistiques")');
+  await page.getByText('Rentabilité par article').waitFor();
+  const st = await page.locator('main, #app').first().innerText();
+  assert.ok(/Chiffre d'affaires \d{4} \(HT\)\s*\n?\s*400,00/.test(st.replace(/ /g, ' ')) || st.includes('400,00'), 'CA 400');
+  assert.ok(st.includes('Château gonflable') && st.includes('500,00') && st.includes('40,00'), 'rentabilité');
+  const dlp = page.waitForEvent('download');
+  await page.click('[data-action="export-csv"]');
+  const dl = await dlp; const csv = fs.readFileSync(await dl.path(), 'utf8');
+  assert.ok(csv.includes('F-2026-0001') && csv.includes('F-2026-0002;') || csv.includes('F-2026-0002'), csv);
+  assert.ok(csv.split('\n')[0].includes('TVA 5,5 %') && csv.includes('Virement') && csv.includes('Total hors annulées;;;;400,00'), csv);
+  await page.click('[data-action="export-mail"]');
+  await page.waitForSelector('#ex-note a[href^="mailto:compta"]');
+  // tournée
+  await page.click('nav.nav button:has-text("Tournée")');
+  await page.fill('[data-tour="day"]', await page.evaluate(() => window.__f(1)));
+  await page.getByText('Fête A').first().waitFor();
+  const names = async () => (await page.locator('.card.card-pad b').allInnerTexts());
+  assert.deepEqual((await names()).slice(0, 2), ['Fête A', 'Fête B']);
+  const href = await page.locator('a:has-text("Ouvrir l\'itinéraire")').getAttribute('href');
+  assert.ok(href.includes('origin=1%20rue%20du%20D') && href.includes('waypoints=5%20rue%20des%20Lilas'), href);
+  await page.locator('[data-action="tour-move"][data-n="1"]').first().click();
+  await page.waitForTimeout(400);
+  assert.deepEqual((await names()).slice(0, 2), ['Fête B', 'Fête A']);
+  assert.ok(await page.locator('.card:has-text("À charger") >> text=× 4').count(), 'à charger 2+2');
+  console.log('Gestion : OK');
+} catch (e) { console.error('ÉCHEC', e.message.split('\n')[0], e.stack.split('\n').filter(l => l.includes('test/gestion')).slice(0,2), errs); process.exitCode = 1; } finally { await browser.close(); server.close(); }
