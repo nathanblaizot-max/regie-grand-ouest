@@ -1060,6 +1060,53 @@ function downloadTour(id){
   S.dl.save({filename:'Tournee-'+String(t.nom||'jour').replace(/[^\w\-]+/g,'-').slice(0,40)+'-'+t.date+'.pdf',data:blob}).then(function(){toast('Feuille enregistrée');}).catch(function(e){if(e&&e.code!=='declined')toast('Téléchargement impossible.');});
 }
 
+/* --- Certificats de conformité (PDF par article) --- */
+var CERT_MAX=1000000;
+function certBlock(m){
+  var dr=S.certDraft,nom=null,taille=0;
+  if(dr&&dr!=='del'){nom=dr.nom;taille=dr.taille;}else if(dr!=='del'&&m&&m.certNom){nom=m.certNom;taille=m.certTaille||0;}
+  var inp='<input type="file" accept="application/pdf,.pdf" hidden data-m-cert="1">';
+  if(!nom)return '<label class="btn btn-sm" style="cursor:pointer">'+ic('plus')+'Ajouter le certificat (PDF)'+inp+'</label><div class="small muted" style="margin-top:6px">PDF de 1 Mo maximum. Joignable au devis sur demande.</div>';
+  return '<div class="row" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="chip info">PDF</span><b style="min-width:0;overflow-wrap:anywhere">'+esc(nom)+'</b><span class="small muted">'+Math.max(1,Math.round(taille/1024))+' Ko'+(dr&&dr!=='del'?' · à enregistrer':'')+'</span></div><div class="toolbar" style="margin:6px 0 0"><label class="btn btn-sm" style="cursor:pointer">Remplacer'+inp+'</label><button class="btn btn-sm btn-danger" type="button" data-action="m-cert-del">Retirer</button></div>';
+}
+function certRefresh(){var el=document.getElementById('m-cert');if(el)el.innerHTML=certBlock(S.draft);}
+function certPick(files){
+  var f=files&&files[0];if(!f)return;
+  if(!/pdf$/i.test(f.type)&&!/\.pdf$/i.test(f.name)){toast('Choisissez un fichier PDF.');return;}
+  if(f.size>CERT_MAX){toast('PDF trop lourd (1 Mo maximum). Compressez-le puis réessayez.');return;}
+  var fr=new FileReader();
+  fr.onload=function(){var d=String(fr.result||'');if(d.indexOf('data:')!==0){toast('Fichier illisible.');return;}S.certDraft={nom:String(f.name).slice(0,120),taille:f.size,data:d};certRefresh();};
+  fr.onerror=function(){toast('Fichier illisible.');};
+  fr.readAsDataURL(f);
+}
+function certDataBlob(du){
+  var i=du.indexOf(','),bin=atob(du.slice(i+1)),a=new Uint8Array(bin.length);
+  for(var k=0;k<bin.length;k++)a[k]=bin.charCodeAt(k);
+  return new Blob([a],{type:'application/pdf'});
+}
+function certDl(mid){
+  var m=byId(S.materiel,mid);
+  if(!S.dl){toast('Le téléchargement n\'est pas disponible dans cette vue.');return;}
+  var done=false,un=null;
+  un=S.db.collection('certifs').doc(mid).onSnapshot(function(s){
+    if(done)return;done=true;setTimeout(function(){if(un)un();},0);
+    if(!s||!s.exists){toast('Certificat introuvable.');return;}
+    var blob;try{blob=certDataBlob(s.data().data);}catch(e){toast('Certificat illisible.');return;}
+    var fn=String((m&&m.certNom)||'certificat').replace(/[^\w.\-]+/g,'-');if(!/\.pdf$/i.test(fn))fn+='.pdf';
+    S.dl.save({filename:fn,data:blob}).then(function(){toast('Certificat enregistré');}).catch(function(e){if(e&&e.code!=='declined')toast('Téléchargement impossible.');});
+  },function(){done=true;toast('Certificat introuvable.');});
+}
+function certsDoc(d){
+  var seen={},out=[];
+  (d.lignes||[]).forEach(function(l){var m=l.materielId&&byId(S.materiel,l.materielId);if(m&&m.certNom&&!seen[m.id]){seen[m.id]=1;out.push(m);}});
+  return out;
+}
+function certsDocHtml(d){
+  var l=certsDoc(d);if(!l.length)return '';
+  return '<div class="card" style="margin-top:12px"><b>Certificats de conformité</b><div class="small muted" style="margin-bottom:6px">Pièces à joindre au devis sur demande du client.</div>'
+   +l.map(function(m){return '<div class="list-row" style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:4px 0"><span style="min-width:0;overflow-wrap:anywhere"><b>'+esc(m.nom)+'</b> <span class="small muted">'+esc(m.certNom)+'</span></span><button class="btn btn-sm" type="button" data-action="cert-dl" data-id="'+esc(m.id)+'">'+ic('dl')+'Enregistrer le PDF</button></div>';}).join('')+'</div>';
+}
+
 /* --- Tâches et rappels --- */
 var RELANCE_J=[2,4,7];
 function diffDays(a,b){return Math.round((parseD(b)-parseD(a))/86400000);}
@@ -1231,7 +1278,7 @@ function materielList(){
   l.forEach(function(m){
     if(m.categorie!==cur){cur=m.categorie;rows+='<tr><td colspan="6" style="background:var(--surface-2);font-family:var(--font-display);font-weight:800">'+esc(cur||'Sans catégorie')+'</td></tr>';}
     var out=reservedMax(m.id,t,t,null),dispo=Math.max(0,dispoInfo(m)-out);
-    rows+='<tr><td><span class="row-click" style="cursor:pointer;font-weight:600" data-action="edit-materiel" data-id="'+m.id+'">'+esc(m.nom)+'</span>'+(m.stockAVerifier?' <span class="chip sun">à renseigner</span>':'')+'</td>'
+    rows+='<tr><td><span class="row-click" style="cursor:pointer;font-weight:600" data-action="edit-materiel" data-id="'+m.id+'">'+esc(m.nom)+'</span>'+(m.stockAVerifier?' <span class="chip sun">à renseigner</span>':'')+(m.certNom?' <span class="chip info" title="Certificat de conformité enregistré">Certificat</span>':'')+'</td>'
      +'<td class="num">'+priceLabel(m)+'</td>'
      +'<td class="num"><input class="stock-in" type="number" min="0" step="1" value="'+num(m.stock)+'" data-stock="'+m.id+'" data-f="stock" aria-label="Stock de '+esc(m.nom)+'"></td>'
      +'<td class="num"><input class="stock-in" type="number" min="0" step="1" value="'+num(m.horsService)+'" data-stock="'+m.id+'" data-f="horsService" aria-label="Hors service : '+esc(m.nom)+'"></td>'
@@ -1422,7 +1469,7 @@ function saveClient(){
 /* --- Matériel --- */
 function openMateriel(id){
   var m=id?byId(S.materiel,id):{nom:'',categorie:S.f.cat||'',prix:0,prixMode:'fixe',unite:'location',stock:1,horsService:0,caution:null,notes:''};
-  S.modal='materiel';S.draft=Object.assign({},m);
+  S.modal='materiel';S.draft=Object.assign({},m);S.certDraft=null;
   var cats=uniq(S.materiel.map(function(x){return x.categorie;})).sort();
   openModal(mhead(id?'Modifier l\'article':'Nouvel article')+'<div class="modal-b"><div class="form-grid"><div class="field"><label for="m-nom">Nom</label><input id="m-nom" value="'+esc(m.nom)+'"></div><div class="field"><label for="m-cat">Catégorie</label><input id="m-cat" list="m-cats" value="'+esc(m.categorie)+'"><datalist id="m-cats">'+cats.map(function(c){return '<option value="'+esc(c)+'">';}).join('')+'</datalist></div>'
    +'<div class="field"><label for="m-prix">Prix de location ('+esc(S.set.prixCatalogue)+')</label><input id="m-prix" type="number" step="0.01" min="0" value="'+(m.prix==null?'':esc(m.prix))+'"></div>'
@@ -1430,7 +1477,7 @@ function openMateriel(id){
    +'<div class="field"><label for="m-unite">Facturé par</label><input id="m-unite" value="'+esc(m.unite||'location')+'" placeholder="location, week-end, pièce…"></div>'
    +'<div class="field"><label for="m-stock">Quantité en stock</label><input id="m-stock" type="number" min="0" step="1" value="'+num(m.stock)+'"></div>'
    +'<div class="field"><label for="m-hs">Hors service</label><input id="m-hs" type="number" min="0" step="1" value="'+num(m.horsService)+'"></div>'
-   +'<div class="field"><label for="m-caution">Caution (€)</label><input id="m-caution" type="number" min="0" step="1" value="'+(m.caution==null?'':esc(m.caution))+'"></div><div class="field"><label for="m-achat">Coût d\'achat total (€, toutes pièces)</label><input id="m-achat" type="number" min="0" step="0.01" value="'+(m.coutAchat==null?'':esc(m.coutAchat))+'" placeholder="Pour calculer l\'amortissement"></div></div><div class="field"><label for="m-notes">Notes (dimensions, capacité, montage…)</label><textarea id="m-notes">'+esc(m.notes)+'</textarea></div></div>'
+   +'<div class="field"><label for="m-caution">Caution (€)</label><input id="m-caution" type="number" min="0" step="1" value="'+(m.caution==null?'':esc(m.caution))+'"></div><div class="field"><label for="m-achat">Coût d\'achat total (€, toutes pièces)</label><input id="m-achat" type="number" min="0" step="0.01" value="'+(m.coutAchat==null?'':esc(m.coutAchat))+'" placeholder="Pour calculer l\'amortissement"></div></div><div class="field"><label for="m-notes">Notes (dimensions, capacité, montage…)</label><textarea id="m-notes">'+esc(m.notes)+'</textarea></div><div class="field"><label>Certificat de conformité de la structure (PDF)</label><div id="m-cert">'+certBlock(m)+'</div></div></div>'
    +'<div class="modal-f">'+(id?'<button class="btn btn-danger" data-action="del-materiel" style="margin-right:auto">'+(S.confirm==='materiel'?'Confirmer la suppression':'Supprimer')+'</button>':'')+'<button class="btn" data-action="close">Annuler</button><button class="btn btn-primary" data-action="save-materiel">Enregistrer</button></div>');
 }
 function saveMateriel(){
@@ -1440,8 +1487,10 @@ function saveMateriel(){
   o.unite=$('#m-unite').value.trim()||'location';o.stock=Math.max(0,Math.round(num($('#m-stock').value)));o.horsService=Math.max(0,Math.round(num($('#m-hs').value)));
   o.caution=$('#m-caution').value===''?null:num($('#m-caution').value);o.coutAchat=$('#m-achat').value===''?null:num($('#m-achat').value);o.notes=$('#m-notes').value.trim();o.stockAVerifier=false;
   if(!o.nom){toast('Indiquez le nom de l\'article.');return;}
-  var id=base.id||uid('materiel');
-  S.db.collection('materiel').doc(id).set(o).then(function(){toast('Article enregistré');closeModal();}).catch(dbErr);
+  var id=base.id||uid('materiel'),cd=S.certDraft,pre=Promise.resolve();
+  if(cd==='del'){delete o.certNom;delete o.certTaille;if(base.certNom)pre=S.db.collection('certifs').doc(id).delete();}
+  else if(cd&&cd.data){o.certNom=cd.nom;o.certTaille=cd.taille;pre=S.db.collection('certifs').doc(id).set({nom:cd.nom,taille:cd.taille,data:cd.data,ts:Date.now()});}
+  pre.then(function(){return S.db.collection('materiel').doc(id).set(o);}).then(function(){S.certDraft=null;toast('Article enregistré');closeModal();}).catch(dbErr);
 }
 
 /* --- Location (dossier) --- */
@@ -1651,6 +1700,7 @@ function openDoc(id,fresh){
    +'<div class="small muted" style="margin-bottom:10px">'+esc(d.titre)+(d.lieu?' · '+(isD?'':'Livraison : ')+esc(d.lieu):'')+' · du '+fmtD(d.dateDebut)+' au '+fmtD(d.dateFin)+'<br>Émis le '+fmtD(d.dateEmission)+(isD?' · valable jusqu\'au '+fmtD(d.dateValidite):' · échéance le '+fmtD(d.dateEcheance))+'</div>'
    +'<div class="table-wrap"><table><thead><tr><th>Désignation</th><th class="num">Qté</th><th class="num">PU HT</th><th class="num">TVA</th><th class="num">Total HT</th></tr></thead><tbody>'+lines+'</tbody></table></div>'
    +'<div class="totals" style="margin-top:12px"><div><span class="muted">Total HT</span><b>'+money(d.totaux.ht)+'</b></div>'+(d.regimeTva==='franchise'?'<div class="small muted">TVA non applicable (art. 293 B du CGI)</div>':d.totaux.detail.map(function(x){return '<div><span class="muted">TVA '+String(x.taux).replace('.',',')+' %</span><span>'+money(x.montant)+'</span></div>';}).join(''))+'<div class="big"><span>Total TTC</span><span>'+money(d.totaux.ttc)+'</span></div>'+acHtml(d)+'</div></div>'+(isD&&d.signature?'<div class="sig-done"><div class="small muted">Bon pour accord · signé le '+fmtD(d.dateSignature)+(d.signataire?' par '+esc(d.signataire):'')+'</div><img src="'+d.signature+'" alt="Signature du client"></div>':'')+''+(!isD?'<div class="small muted" style="margin-top:10px">'+esc(mentionsFacture(d,soc).join(' '))+'</div>':'')+((soc.mediateur||S.set.mediateur)?'<div class="small muted" style="margin-top:8px">Médiateur de la consommation : '+esc(String(soc.mediateur||S.set.mediateur).replace(/\s*\n\s*/g,' – '))+'</div>':'')+'<div id="mail-note" class="small" style="margin-top:12px">'+(num(d.relanceNiv)?'<span class="muted">Relances envoyées : '+d.relanceNiv+'/3, dernière le '+fmtD(d.derniereRelance)+'</span>':'')+'</div></div>';
+  if(isD)h+=certsDocHtml(d);
   h+='<div class="modal-f">';
   if(isD&&d.statut!=='refuse'&&resteDu(d)>0)h+='<button class="btn" data-action="ac-add" data-id="'+esc(id)+'">'+ic('cash')+'Enregistrer un acompte</button>';
   if(isD)h+=(d.statut!=='accepte'?'<button class="btn btn-danger btn-sm" data-action="del-doc" style="margin-right:auto">'+(S.confirm==='doc'?'Confirmer la suppression':'Supprimer')+'</button>':'')+(d.signature?'':'<button class="btn" data-action="sign-doc" data-id="'+esc(id)+'">'+ic('check')+'Faire signer</button>')+'<button class="btn" data-action="dl-contrat">'+ic('dl')+'Contrat de location</button>'+(window.WEB&&!d.signature&&d.statut!=='refuse'?'<button class="btn" data-action="sign-link">Lien de signature en ligne</button>':'')+'<button class="btn" data-action="devis-to-facture">Transformer en facture</button>';
@@ -2246,7 +2296,9 @@ var A={
   'new-materiel':function(){openMateriel();},
   'edit-materiel':function(t){openMateriel(t.dataset.id);},
   'save-materiel':saveMateriel,
-  'del-materiel':function(){if(S.confirm!=='materiel'){S.confirm='materiel';openMateriel(S.draft.id);return;}S.db.collection('materiel').doc(S.draft.id).delete().then(function(){toast('Article supprimé');closeModal();}).catch(dbErr);},
+  'm-cert-del':function(){S.certDraft='del';certRefresh();},
+  'cert-dl':function(t){certDl(t.dataset.id);},
+  'del-materiel':function(){if(S.confirm!=='materiel'){S.confirm='materiel';openMateriel(S.draft.id);return;}if(S.draft.certNom)S.db.collection('certifs').doc(S.draft.id).delete();S.db.collection('materiel').doc(S.draft.id).delete().then(function(){toast('Article supprimé');closeModal();}).catch(dbErr);},
   'kpi-dehors':function(){S.view='dossiers';S.f.q='';S.f.cat='';S.f.statut='';S.f.aCompleter=false;S.f.dehors=true;try{localStorage.setItem('regie-view',S.view);}catch(e){}render();window.scrollTo(0,0);},
   'kpi-dehors-off':function(){S.f.dehors=false;render();},
   'kpi-doc':function(t){S.view='documents';S.f.dtype=t.dataset.t;S.f.statut=t.dataset.st;S.f.q='';try{localStorage.setItem('regie-view',S.view);}catch(e){}render();window.scrollTo(0,0);},
@@ -2313,6 +2365,7 @@ document.addEventListener('change',function(e){
   var t=e.target;
   if(t.dataset&&t.dataset.tsel){var kk=t.dataset.tsel.split(':'),ds=S.draft.stops,ix=-1;ds.forEach(function(x,i){if(x.k===kk[0]&&x.id===kk[1])ix=i;});if(t.checked&&ix<0)ds.push({k:kk[0],id:kk[1]});else if(!t.checked&&ix>=0)ds.splice(ix,1);renderTourModal();return;}
   if(t.dataset&&t.dataset.tf&&S.modal==='tour'){var f=t.dataset.tf;if(f==='retour'||f==='range'){S.draft[f]=f==='range'?(t.checked?1:0):t.checked;renderTourModal();return;}if(f==='date'&&t.value){S.draft.date=t.value;renderTourModal();return;}S.draft[f]=t.value;return;}
+  if(t.dataset&&t.dataset.mCert){certPick(t.files);t.value='';return;}
   if(t.dataset&&t.dataset.edlPhoto){addPhotos(t.files,S.draft.id,t.dataset.edlPhoto);t.value='';return;}
   if(t.dataset&&t.dataset.stat==='y'){S.f.statY=t.value;render();return;}
   if(t.dataset&&t.dataset.tour==='day'&&t.value){S.f.tourDay=t.value;render();return;}
