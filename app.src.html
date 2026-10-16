@@ -751,8 +751,8 @@ function addPhotos(files,id,phase){
 }
 function edlPhotosHtml(id,phase){
   var l=photosDe(id,phase);
-  if(!l.length)return '<div class="small muted">Aucune photo.</div>';
-  return '<div class="ph-grid">'+l.map(function(p){return '<div class="ph"><img src="'+p.data+'" alt="Photo" data-action="edl-zoom"><button class="icon-btn ph-x" data-action="edl-photo-del" data-id="'+p.id+'" aria-label="Supprimer la photo">'+ic('x')+'</button></div>';}).join('')+'</div>';
+  if(!l.length)return '';
+  return '<div class="ph-grid" style="margin-top:8px">'+l.map(function(p){return '<div class="ph"><img src="'+p.data+'" alt="Photo" data-action="edl-zoom"><button class="icon-btn ph-x" data-action="edl-photo-del" data-id="'+p.id+'" aria-label="Supprimer la photo">'+ic('x')+'</button></div>';}).join('')+'</div>';
 }
 function edlRefresh(){
   var d=S.draft;if(!d||!d.id)return;
@@ -783,12 +783,12 @@ function openEdl(id){
    +'<div class="small" id="c-res" style="margin:6px 0"></div>'
    +'<div class="toolbar" style="margin:0"><button class="btn btn-sm'+(st?'':' btn-primary')+'" data-action="edl-caution" data-st="versee">Caution reçue</button>'+(ue?'<button class="btn btn-sm" data-action="edl-retenir">Retenir les casses</button>':'')+'<button class="btn btn-sm'+(st==='versee'?' btn-primary':'')+'" data-action="edl-caution" data-st="rendue">Restituer la caution</button>'+(st?'<button class="btn btn-sm" data-action="edl-caution" data-st="">Annuler le statut</button>':'')+'</div>'
    +(st==='rendue'&&c.dateRendu?'<div class="small muted" style="margin-top:6px">Restituée le '+fmtD(c.dateRendu)+(num(c.retenue)>0?' avec une retenue de '+money(num(c.retenue)):'')+'.</div>':'')+'</section>';
-  if(ue)h+='<section class="dsec"><h3>État des lieux au départ</h3><div class="form-grid"><div class="field"><label for="ed-date">Date</label><input id="ed-date" type="date" value="'+esc(dep.date||d.dateDebut||'')+'"></div></div>'
+  if(ue)h+='<section class="dsec"><h3 style="display:flex;align-items:center;justify-content:space-between;gap:8px">État des lieux au départ <label class="btn btn-sm" style="cursor:pointer;font-weight:600;text-transform:none;letter-spacing:0;margin:0" title="Ajouter des photos">'+ic('plus')+'Photos<input type="file" accept="image/*" multiple hidden data-edl-photo="depart"></label></h3><div class="form-grid"><div class="field"><label for="ed-date">Date</label><input id="ed-date" type="date" value="'+esc(dep.date||d.dateDebut||'')+'"></div></div>'
    +'<div class="field"><label for="ed-notes">Observations (état du matériel à la remise)</label><textarea id="ed-notes" rows="3" placeholder="Rien à signaler, petite rayure sur…">'+esc(dep.notes||'')+'</textarea></div>'
-   +'<label class="btn btn-sm" style="cursor:pointer">'+ic('plus')+'Ajouter des photos<input type="file" accept="image/*" multiple hidden data-edl-photo="depart"></label><div id="edl-ph-depart" style="margin-top:8px">'+edlPhotosHtml(id,'depart')+'</div></section>'
-   +'<section class="dsec"><h3>État des lieux au retour</h3><div class="form-grid"><div class="field"><label for="er-date">Date</label><input id="er-date" type="date" value="'+esc(ret.date||d.dateFin||'')+'"></div></div>'
+   +'<div id="edl-ph-depart">'+edlPhotosHtml(id,'depart')+'</div></section>'
+   +'<section class="dsec"><h3 style="display:flex;align-items:center;justify-content:space-between;gap:8px">État des lieux au retour <label class="btn btn-sm" style="cursor:pointer;font-weight:600;text-transform:none;letter-spacing:0;margin:0" title="Ajouter des photos">'+ic('plus')+'Photos<input type="file" accept="image/*" multiple hidden data-edl-photo="retour"></label></h3><div class="form-grid"><div class="field"><label for="er-date">Date</label><input id="er-date" type="date" value="'+esc(ret.date||d.dateFin||'')+'"></div></div>'
    +'<div class="field"><label for="er-notes">Observations (état du matériel au retour)</label><textarea id="er-notes" rows="3">'+esc(ret.notes||'')+'</textarea></div>'
-   +'<label class="btn btn-sm" style="cursor:pointer">'+ic('plus')+'Ajouter des photos<input type="file" accept="image/*" multiple hidden data-edl-photo="retour"></label><div id="edl-ph-retour" style="margin-top:8px">'+edlPhotosHtml(id,'retour')+'</div>'
+   +'<div id="edl-ph-retour">'+edlPhotosHtml(id,'retour')+'</div>'
    +'<div style="margin-top:12px"><b class="small">Casses ou manquants</b><div id="casses">'+casseRows()+'</div><button class="btn btn-sm" data-action="edl-casse-add" style="margin-top:6px">'+ic('plus')+'Ajouter une casse</button></div></section>';
   h+='</div><div class="modal-f"><button class="btn" data-action="close">Fermer</button><button class="btn" data-action="edl-pdf">'+ic('dl')+'Fiche PDF</button><button class="btn btn-primary" data-action="edl-save">Enregistrer</button></div>';
   openModal(h);cautionResume();
