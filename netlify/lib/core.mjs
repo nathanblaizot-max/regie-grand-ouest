@@ -8,6 +8,8 @@ const COLS = /^[a-z_]{1,40}$/;
 const IDS = /^[A-Za-z0-9_\-]{1,100}$/;
 const MAX_OPS = 200;
 const MAX_DOC_BYTES = 1500000;
+const HEAVY = new Set(['photos', 'certifs']);
+const BLOB_MIN = 2000; // au-delà, un champ « data:… » part dans le stockage de fichiers
 const fails = new Map();
 let secretCache = null;
 
@@ -119,6 +121,29 @@ function publicDevis(d) {
   };
 }
 
+
+// ---- Stockage de fichiers (photos, PDF) : hors de la base, clé = locataire/collection/doc/champ.
+// opts.blobs = { set(key, texte), get(key) -> texte|null, delete(key) } ; absent => tout reste dans la base.
+const bkey = (t, col, id, f) => [t, col, id, f].map(encodeURIComponent).join('/');
+const bigFields = (data) => Object.keys(data || {}).filter((k) => typeof data[k] === 'string' && data[k].length > BLOB_MIN && data[k].startsWith('data:'));
+async function blobsOut(blobs, tenant, col, id, data) {
+  // Sort les gros champs vers le stockage ; renvoie les métadonnées + la liste des champs externalisés.
+  const out = { ...data };
+  const moved = [];
+  for (const k of bigFields(data)) { await blobs.set(bkey(tenant, col, id, k), data[k]); delete out[k]; moved.push(k); }
+  if (moved.length) out._blob = moved;
+  return out;
+}
+async function blobsIn(blobs, tenant, col, id, data) {
+  if (!data || !Array.isArray(data._blob)) return data;
+  const out = { ...data }; delete out._blob;
+  for (const k of data._blob) { const v = await blobs.get(bkey(tenant, col, id, k)); if (v != null) out[k] = v; }
+  return out;
+}
+async function blobsDrop(blobs, tenant, col, id) {
+  for (const k of ['data']) { try { await blobs.delete(bkey(tenant, col, id, k)); } catch (e) { /* déjà absent */ } }
+}
+
 export async function handle(req, db, opts = {}) {
   const url = new URL(req.url);
   const path = url.pathname.replace(/^\/api\/?/, '').replace(/\/$/, '');
@@ -211,7 +236,19 @@ export async function handle(req, db, opts = {}) {
       if (id && IDS.test(id)) rows = await db.sql`SELECT id, data FROM docs WHERE tenant = ${me.tenant} AND col = ${col} AND id = ${id} AND deleted = false`;
       else if (col === 'photos' && dos && IDS.test(dos)) rows = await db.sql`SELECT id, data FROM docs WHERE tenant = ${me.tenant} AND col = ${col} AND deleted = false AND data->>'dossierId' = ${dos} LIMIT 60`;
       else return J({ error: 'requete' }, 400);
-      return J({ docs: rows.map((r) => ({ col, id: r.id, data: r.data })) });
+      const out = [];
+      for (const r of rows) {
+        let d = r.data;
+        if (opts.blobs) {
+          if (Array.isArray(d && d._blob)) d = await blobsIn(opts.blobs, me.tenant, col, r.id, d);
+          else if (bigFields(d).length) { // ancienne ligne : on la déplace au passage vers le stockage de fichiers
+            const slim = await blobsOut(opts.blobs, me.tenant, col, r.id, d);
+            await db.sql`UPDATE docs SET data = ${JSON.stringify(slim)}::jsonb WHERE tenant = ${me.tenant} AND col = ${col} AND id = ${r.id}`;
+          }
+        }
+        out.push({ col, id: r.id, data: d });
+      }
+      return J({ docs: out });
     }
 
     if (path === 'write' && method === 'POST') {
@@ -224,6 +261,10 @@ export async function handle(req, db, opts = {}) {
       }
       for (const o of ops) {
         const t = me.tenant;
+        if (opts.blobs && HEAVY.has(o.col)) {
+          if (o.op === 'delete') await blobsDrop(opts.blobs, t, o.col, o.id);
+          else o.data = await blobsOut(opts.blobs, t, o.col, o.id, o.data);
+        }
         if (o.op === 'delete') {
           await db.sql`INSERT INTO docs (tenant, col, id, data, deleted) VALUES (${t}, ${o.col}, ${o.id}, '{}'::jsonb, true)
             ON CONFLICT (tenant, col, id) DO UPDATE SET data = '{}'::jsonb, deleted = true, seq = nextval('docs_seq')`;

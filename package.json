@@ -9,6 +9,7 @@
     "test": "node test/run.mjs"
   },
   "dependencies": {
+    "@netlify/blobs": "latest",
     "@netlify/database": "latest",
     "@netlify/functions": "latest"
   }

@@ -29,6 +29,7 @@ export function makeFakeDb() {
     if (t.startsWith("SELECT id, data FROM docs WHERE tenant = ? AND col = ? AND deleted = false AND data->>'dossierId'")) { const [tenant, col, dos] = v; return [...docs.values()].filter((d) => d.tenant === tenant && d.col === col && !d.deleted && d.data && d.data.dossierId === dos).slice(0, 60).map((d) => ({ id: d.id, data: d.data })); }
     if (t.startsWith("SELECT coalesce(max(seq), 0)::text AS m FROM docs")) return [{ m: String(Math.max(0, ...[...docs.values()].filter((d) => d.tenant === v[0]).map((d) => d.seq))) }];
     if (t.startsWith("SELECT tenant, id, data FROM docs WHERE col = 'documents'")) return [...docs.values()].filter((d) => d.col === 'documents' && !d.deleted && d.data.signToken === v[0]);
+    if (t.startsWith("UPDATE docs SET data = ?::jsonb WHERE tenant")) { const [json, tenant, col, id] = v, ex = docs.get(tenant + '|' + col + '|' + id); ex.data = JSON.parse(json); return []; }
     if (t.startsWith("UPDATE docs SET data = data ||")) { const [patch, tenant, id] = v, key = tenant + '|documents|' + id, ex = docs.get(key); docs.set(key, { ...ex, data: { ...ex.data, ...JSON.parse(patch) }, seq: ++seq }); return []; }
     if (t.startsWith("INSERT INTO docs")) {
       const [tenant, col, id] = v, key = tenant + '|' + col + '|' + id, ex = docs.get(key);

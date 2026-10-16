@@ -5,8 +5,10 @@ import path from 'node:path';
 import { handle } from '../netlify/lib/core.mjs';
 import { makeFakeDb } from './fake-db.mjs';
 
-export function startServer(port = 0) {
+export function startServer(port = 0, withBlobs = true) {
   const db = makeFakeDb();
+  const files = new Map();
+  const blobs = withBlobs ? { set: async (k, v) => void files.set(k, v), get: async (k) => (files.has(k) ? files.get(k) : null), delete: async (k) => void files.delete(k) } : undefined;
   const pub = path.resolve(new URL('../public', import.meta.url).pathname);
   const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
   const server = http.createServer(async (req, res) => {
@@ -14,7 +16,7 @@ export function startServer(port = 0) {
     if (req.url.startsWith('/api/')) {
       const chunks = []; for await (const c of req) chunks.push(c);
       const r = new Request(origin + req.url, { method: req.method, headers: req.headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : Buffer.concat(chunks) });
-      const out = await handle(r, db, { setupCode: 'TESTCODE' });
+      const out = await handle(r, db, { setupCode: 'TESTCODE', blobs });
       const headers = {}; out.headers.forEach((v, k) => (headers[k] = v));
       res.writeHead(out.status, headers); res.end(Buffer.from(await out.arrayBuffer())); return;
     }
@@ -23,5 +25,5 @@ export function startServer(port = 0) {
     if (!file.startsWith(pub) || !fs.existsSync(file)) { res.writeHead(404); res.end('404'); return; }
     res.writeHead(200, { 'content-type': types[path.extname(file)] || 'application/octet-stream' }); res.end(fs.readFileSync(file));
   });
-  return new Promise((resolve) => server.listen(port, '127.0.0.1', () => resolve({ server, db, port: server.address().port })));
+  return new Promise((resolve) => server.listen(port, '127.0.0.1', () => resolve({ server, db, files, port: server.address().port })));
 }
