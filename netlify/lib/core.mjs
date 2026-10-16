@@ -195,11 +195,23 @@ export async function handle(req, db, opts = {}) {
     if (path === 'sync' && method === 'GET') {
       const since = Math.max(0, parseInt(url.searchParams.get('since') || '0', 10) || 0);
       const limit = Math.min(500, Math.max(1, parseInt(url.searchParams.get('limit') || '400', 10) || 400));
-      const rows = await db.sql`SELECT col, id, data, deleted, seq::text AS seq FROM docs WHERE tenant = ${me.tenant} AND seq > ${since} ORDER BY seq ASC LIMIT ${limit + 1}`;
+      const rows = await db.sql`SELECT col, id, data, deleted, seq::text AS seq FROM docs WHERE tenant = ${me.tenant} AND seq > ${since} AND col NOT IN ('photos', 'certifs') ORDER BY seq ASC LIMIT ${limit + 1}`;
       const more = rows.length > limit;
       const docs = rows.slice(0, limit);
       const mx = docs.length ? Number(docs[docs.length - 1].seq) : since;
       return J({ docs: docs.map((r) => ({ col: r.col, id: r.id, data: r.data, deleted: r.deleted, seq: Number(r.seq) })), max: mx, more });
+    }
+
+    // Collections lourdes (photos, certificats PDF) : exclues de la synchro, lues à la demande.
+    if (path === 'heavy' && method === 'GET') {
+      const col = String(url.searchParams.get('col') || '');
+      if (col !== 'photos' && col !== 'certifs') return J({ error: 'collection' }, 400);
+      const id = url.searchParams.get('id'), dos = url.searchParams.get('dossierId');
+      let rows = [];
+      if (id && IDS.test(id)) rows = await db.sql`SELECT id, data FROM docs WHERE tenant = ${me.tenant} AND col = ${col} AND id = ${id} AND deleted = false`;
+      else if (col === 'photos' && dos && IDS.test(dos)) rows = await db.sql`SELECT id, data FROM docs WHERE tenant = ${me.tenant} AND col = ${col} AND deleted = false AND data->>'dossierId' = ${dos} LIMIT 60`;
+      else return J({ error: 'requete' }, 400);
+      return J({ docs: rows.map((r) => ({ col, id: r.id, data: r.data })) });
     }
 
     if (path === 'write' && method === 'POST') {

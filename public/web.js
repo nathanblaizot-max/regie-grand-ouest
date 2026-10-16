@@ -107,6 +107,15 @@
     else m[id] = Object.assign({}, m[id] || {}, JSON.parse(JSON.stringify(data)));
     fire([col]);
   }
+  /* Collections lourdes (photos, PDF) : jamais dans la synchro, chargées à la demande. */
+  var HEAVY = { photos: 1, certifs: 1 };
+  function heavyGet(qs) {
+    return api('GET', 'heavy?' + qs).then(function (r) {
+      if (r.status === 401) { showLogin(); throw { code: 'non-connecte' }; }
+      if (r.status !== 200) throw { code: (r.body && r.body.error) || 'erreur' };
+      return r.body.docs || [];
+    }, function () { throw { code: 'hors-ligne' }; });
+  }
   function docRef(col, id) {
     return {
       id: id,
@@ -115,7 +124,9 @@
       delete: function () { localApply(col, id, 'delete'); return write([{ op: 'delete', col: col, id: id }]); },
       onSnapshot: function (ok, err) {
         var k = col + '/' + id; (docCbs[k] = docCbs[k] || []).push({ ok: ok, err: err });
-        if (loaded) setTimeout(function () { ok(snapDoc(col, id)); }, 0);
+        if (HEAVY[col] && (cache[col] || {})[id] === undefined) {
+          heavyGet('col=' + col + '&id=' + encodeURIComponent(id)).then(function (docs) { apply(docs); try { ok(snapDoc(col, id)); } catch (e) { console.error(e); } }, function (e) { if (err) err(e); });
+        } else if (loaded) setTimeout(function () { ok(snapDoc(col, id)); }, 0);
         return function () { docCbs[k] = (docCbs[k] || []).filter(function (l) { return l.ok !== ok; }); };
       }
     };
@@ -127,6 +138,19 @@
   var dbApi = {
     collection: function (col) {
       return {
+        where: function (f, op, v) {
+          return {
+            onSnapshot: function (ok, err) {
+              var filt = function (snap) { return { docs: snap.docs.filter(function (d) { var x = d.data(); return x && x[f] === v; }) }; };
+              var l = { ok: function (snap) { ok(filt(snap)); }, err: err };
+              (colCbs[col] = colCbs[col] || []).push(l);
+              var go = function () { try { ok(filt(snapCol(col))); } catch (e) { console.error(e); } };
+              if (HEAVY[col] && f === 'dossierId' && op === '==') heavyGet('col=' + col + '&dossierId=' + encodeURIComponent(v)).then(function (docs) { apply(docs); go(); }, function (e) { if (err) err(e); });
+              else if (loaded) setTimeout(go, 0);
+              return function () { colCbs[col] = (colCbs[col] || []).filter(function (x) { return x !== l; }); };
+            }
+          };
+        },
         doc: function (id) { return docRef(col, id || newId()); },
         onSnapshot: function (ok, err) {
           (colCbs[col] = colCbs[col] || []).push({ ok: ok, err: err });

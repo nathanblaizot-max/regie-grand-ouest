@@ -23,8 +23,10 @@ export function makeFakeDb() {
     if (t.startsWith("DELETE FROM users")) { users.splice(users.findIndex((u) => u.id === v[0]), 1); return []; }
     if (t.startsWith("SELECT col, id, data, deleted, seq::text AS seq FROM docs")) {
       const [tenant, since, limit] = v;
-      return [...docs.values()].filter((d) => d.tenant === tenant && d.seq > since).sort((a, b) => a.seq - b.seq).slice(0, limit).map((d) => ({ ...d, seq: String(d.seq) }));
+      return [...docs.values()].filter((d) => d.tenant === tenant && d.seq > since && d.col !== 'photos' && d.col !== 'certifs').sort((a, b) => a.seq - b.seq).slice(0, limit).map((d) => ({ ...d, seq: String(d.seq) }));
     }
+    if (t.startsWith("SELECT id, data FROM docs WHERE tenant = ? AND col = ? AND id = ?")) { const [tenant, col, id] = v; return [...docs.values()].filter((d) => d.tenant === tenant && d.col === col && d.id === id && !d.deleted).map((d) => ({ id: d.id, data: d.data })); }
+    if (t.startsWith("SELECT id, data FROM docs WHERE tenant = ? AND col = ? AND deleted = false AND data->>'dossierId'")) { const [tenant, col, dos] = v; return [...docs.values()].filter((d) => d.tenant === tenant && d.col === col && !d.deleted && d.data && d.data.dossierId === dos).slice(0, 60).map((d) => ({ id: d.id, data: d.data })); }
     if (t.startsWith("SELECT coalesce(max(seq), 0)::text AS m FROM docs")) return [{ m: String(Math.max(0, ...[...docs.values()].filter((d) => d.tenant === v[0]).map((d) => d.seq))) }];
     if (t.startsWith("SELECT tenant, id, data FROM docs WHERE col = 'documents'")) return [...docs.values()].filter((d) => d.col === 'documents' && !d.deleted && d.data.signToken === v[0]);
     if (t.startsWith("UPDATE docs SET data = data ||")) { const [patch, tenant, id] = v, key = tenant + '|documents|' + id, ex = docs.get(key); docs.set(key, { ...ex, data: { ...ex.data, ...JSON.parse(patch) }, seq: ++seq }); return []; }

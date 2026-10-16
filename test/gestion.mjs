@@ -55,10 +55,10 @@ try {
   assert.ok(t.includes('ÉTAT DES LIEUX') && t.some(x => x.includes('Retenue : 30,00')) && t.some(x => x.includes('Valve cassée')), JSON.stringify(t));
   await page.click('[data-action="edl-caution"][data-st="rendue"]');
   await page.waitForSelector('text=Restituée le');
-  const dc = await page.evaluate(async () => { const r = await (await fetch('/api/sync?since=0&limit=500')).json(); return { d: r.docs.find(x => x.id === 'dC').data, ph: r.docs.filter(x => x.col === 'photos').map(x => x.data.data.slice(0, 23) + '|' + x.data.phase + '|' + x.data.dossierId) }; });
+  const dc = await page.evaluate(async () => { const r = await (await fetch('/api/sync?since=0&limit=500')).json(); const h = await (await fetch('/api/heavy?col=photos&dossierId=dC')).json(); const all = await (await fetch('/api/heavy?col=photos&dossierId=nope')).json(); return { d: r.docs.find(x => x.id === 'dC').data, ph: h.docs.map(x => x.data.data.slice(0, 23) + '|' + x.data.phase + '|' + x.data.dossierId), vide: all.docs.length, horsSynchro: r.docs.filter(x => x.col === 'photos').length }; });
   assert.equal(dc.d.caution.statut, 'rendue'); assert.equal(dc.d.caution.retenue, 30);
   assert.equal(dc.d.edl.retour.casses[0].designation, 'Valve cassée'); assert.equal(dc.d.lignes.length, 1);
-  assert.deepEqual(dc.ph, ['data:image/jpeg;base64,|retour|dC']);
+  assert.deepEqual(dc.ph, ['data:image/jpeg;base64,|retour|dC']); assert.equal(dc.vide, 0); assert.equal(dc.horsSynchro, 0, 'photos exclues de la synchro');
   await page.locator('.modal-f [data-action="close"]').click();
   // modifier une location ne détruit pas la caution
   await page.click('nav.nav button:has-text("Locations")');

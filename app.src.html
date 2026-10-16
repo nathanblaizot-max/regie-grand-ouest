@@ -475,7 +475,7 @@ function initDb(){
   c.use('db').then(function(db){
     if(!db){S.error="Le stockage n'est pas disponible dans cette vue.";schedule();return;}
     S.db=db;
-    ['materiel','clients','dossiers','documents','taches','entretiens','caisses','photos','tournees','vehicules','ikjours'].forEach(sub);
+    ['materiel','clients','dossiers','documents','taches','entretiens','caisses','tournees','vehicules','ikjours'].forEach(sub);
     db.doc('config/societe').onSnapshot(function(snap){
       S.set=Object.assign({},DEFAULT_SET,snap.exists?snap.data():{});applyTheme();S.loaded.config=true;checkReady();schedule();
     },function(e){S.error='Lecture impossible ('+(e&&e.code||'erreur')+').';schedule();});
@@ -625,6 +625,10 @@ function vDossiers(){
   h+='<div class="toolbar">'+quiBar()+'</div><div class="card" id="list">'+dossierList()+'</div>';
   return h;
 }
+var LIM0=60;
+function lim(k){return S.f['lim_'+k]||LIM0;}
+function resetLim(){Object.keys(S.f).forEach(function(k){if(k.indexOf('lim_')===0)delete S.f[k];});}
+function moreBtn(k,rest){return rest>0?'<div class="toolbar" style="justify-content:center;margin:12px 0"><button class="btn" data-action="more" data-l="'+k+'">Afficher '+Math.min(rest,LIM0)+' de plus ('+rest+' restant'+(rest>1?'s':'')+')</button></div>':'';}
 function dossierList(){
   var q=S.f.q.toLowerCase();
   var l=S.dossiers.filter(function(d){
@@ -636,7 +640,7 @@ function dossierList(){
   }).sort(function(a,b){var t=today(),pa=(a.dateFin||a.dateDebut||'')<t,pb=(b.dateFin||b.dateDebut||'')<t;if(pa!==pb)return pa?1:-1;if(pa)return a.dateDebut<b.dateDebut?1:-1;return a.dateDebut<b.dateDebut?-1:a.dateDebut>b.dateDebut?1:0;});
   if(!S.dossiers.length)return empty('Aucune location','Créez votre première location : client, dates, matériel.','<button class="btn btn-primary" data-action="new-dossier">'+ic('plus')+'Nouvelle location</button>');
   if(!l.length)return empty('Aucun résultat','Modifiez la recherche ou le filtre.');
-  return l.map(dossierRow).join('');
+  return l.slice(0,lim('dossiers')).map(dossierRow).join('')+moreBtn('dossiers',l.length-lim('dossiers'));
 }
 
 /* --- Documents --- */
@@ -676,8 +680,8 @@ function docList(){
   }).sort(function(a,b){return a.numero<b.numero?1:-1;});
   if(!l.length)return empty((S.documents.some(function(d){return d.type===tp;}))?'Aucun résultat':'Aucun '+(tp==='devis'?'devis':'facture'),(S.documents.some(function(d){return d.type===tp;}))?'Modifiez la recherche ou le filtre.':'Créez-en un depuis une location.');
   var tot=0;
-  var rows=l.map(function(d){
-    if(d.statut!=='annulee'&&d.statut!=='refuse')tot+=d.totaux.ttc;
+  l.forEach(function(d){if(d.statut!=='annulee'&&d.statut!=='refuse')tot+=d.totaux.ttc;});
+  var rows=l.slice(0,lim('docs')).map(function(d){
     var st=d.type==='devis'?chip(ST_DEVIS,d.statut):(isLate(d)?'<span class="chip bad">En retard</span>':chip(ST_FACT,d.statut));
     var act='';
     if(d.type==='devis'){
@@ -701,7 +705,7 @@ function docList(){
       bar='<div class="grp-bar"><span><b>'+sl.length+' devis sélectionné(s)</b> · '+money(sT)+' TTC'+(cls.length>1?' · <span style="color:var(--bad)">clients différents</span>':'')+'</span><span style="display:flex;gap:6px"><button class="btn btn-sm" data-action="grp-clear">Effacer</button><button class="btn btn-sm btn-primary" data-action="grp-facturer"'+(sl.length<2||cls.length>1?' disabled':'')+'>Créer une facture groupée</button></span></div>';}
     else bar='<div class="small muted" style="padding:8px 12px">Astuce : cochez plusieurs devis d\'un même client pour créer une facture groupée.</div>';
   }
-  return bar+'<table><thead><tr>'+(tp==='devis'?'<th></th>':'')+'<th>Numéro</th><th>Client</th><th>Date</th><th>Délai</th><th>Statut</th><th class="num">Total TTC</th><th></th></tr></thead><tbody>'+rows+'</tbody><tfoot><tr><td colspan="'+(tp==='devis'?6:5)+'" class="small muted">'+l.length+' document(s), hors annulés'+(tp==='devis'?' et refusés':'')+'</td><td class="num"><b>'+money(tot)+'</b></td><td></td></tr></tfoot></table>';
+  return bar+'<table><thead><tr>'+(tp==='devis'?'<th></th>':'')+'<th>Numéro</th><th>Client</th><th>Date</th><th>Délai</th><th>Statut</th><th class="num">Total TTC</th><th></th></tr></thead><tbody>'+rows+'</tbody><tfoot><tr><td colspan="'+(tp==='devis'?6:5)+'" class="small muted">'+l.length+' document(s), hors annulés'+(tp==='devis'?' et refusés':'')+'</td><td class="num"><b>'+money(tot)+'</b></td><td></td></tr></tfoot></table>'+moreBtn('docs',l.length-lim('docs'));
 }
 
 /* --- Caution, état des lieux, photos --- */
@@ -720,6 +724,12 @@ function cautionAlertes(){
     else if(!c.statut&&cautionTotale(d)>0&&d.statut==='confirmee'&&d.dateDebut>=t&&d.dateDebut<=addDays(t,2))a.push(d);
   });
   return {rendre:r,recevoir:a};
+}
+function photosStop(){if(S.photosUn){try{S.photosUn();}catch(e){}}S.photosUn=null;S.photosFor=null;S.photos=[];}
+function photosWatch(id){
+  if(S.photosFor===id&&S.photosUn)return;
+  photosStop();S.photosFor=id;
+  S.photosUn=S.db.collection('photos').where('dossierId','==',id).onSnapshot(function(snap){S.photos=snap.docs.map(function(d){var o=Object.assign({},d.data());o.id=d.id;return o;});if(S.modal==='edl')edlRefresh();},function(){});
 }
 function photosDe(id,phase){return S.photos.filter(function(p){return p.dossierId===id&&p.phase===phase;}).sort(function(a,b){return (a.ts||0)-(b.ts||0);});}
 function readPhoto(file,id,phase){
@@ -760,6 +770,7 @@ function cautionResume(){
 }
 function openEdl(id){
   var d=byId(S.dossiers,id);if(!d)return;
+  photosWatch(id);
   var e=d.edl||{},dep=e.depart||{},ret=e.retour||{},c=d.caution||{},uc=useCaution(),ue=useEdl();
   S.modal='edl';S.draft={id:id,casses:JSON.parse(JSON.stringify(ret.casses||[]))};
   var st=c.statut||'';
@@ -1573,11 +1584,11 @@ function clientList(){
   var l=S.clients.filter(function(c){return !q||(c.nom+' '+c.email+' '+c.tel).toLowerCase().indexOf(q)>=0;}).sort(function(a,b){return String(a.nom).localeCompare(String(b.nom),'fr');});
   if(!S.clients.length)return empty('Aucun client','Ajoutez un client ou créez-le depuis une location.','<button class="btn btn-primary" data-action="new-client">'+ic('plus')+'Nouveau client</button>');
   if(!l.length)return empty('Aucun résultat','Modifiez la recherche.');
-  return '<table><thead><tr><th>Nom</th><th>Contact</th><th>Type</th><th class="num">Locations</th><th class="num">Facturé HT</th></tr></thead><tbody>'+l.map(function(c){
+  return '<table><thead><tr><th>Nom</th><th>Contact</th><th>Type</th><th class="num">Locations</th><th class="num">Facturé HT</th></tr></thead><tbody>'+l.slice(0,lim('clients')).map(function(c){
     var n=S.dossiers.filter(function(d){return d.clientId===c.id;}).length;
     var ca=S.documents.filter(function(d){return d.type==='facture'&&d.statut!=='annulee'&&d.clientId===c.id;}).reduce(function(s,d){return s+d.totaux.ht;},0);
     return '<tr class="row-click" data-action="edit-client" data-id="'+c.id+'"><td><b>'+esc(c.nom)+'</b></td><td class="small">'+esc(c.tel||'')+(c.tel&&c.email?'<br>':'')+esc(c.email||'')+'</td><td>'+(c.type==='pro'?'Professionnel':'Particulier')+'</td><td class="num">'+n+'</td><td class="num">'+money(ca)+'</td></tr>';
-  }).join('')+'</tbody></table>';
+  }).join('')+'</tbody></table>'+moreBtn('clients',l.length-lim('clients'));
 }
 
 /* --- Matériel --- */
@@ -1598,8 +1609,8 @@ function materielList(){
   }).sort(function(a,b){return (a.categorie+a.nom).localeCompare(b.categorie+b.nom,'fr');});
   if(!S.materiel.length)return empty('Aucun matériel','Ajoutez vos articles pour suivre le stock et les disponibilités.','<button class="btn btn-primary" data-action="new-materiel">'+ic('plus')+'Nouvel article</button>');
   if(!l.length)return empty('Aucun résultat','Modifiez la recherche ou les filtres.');
-  var cur='',rows='';
-  l.forEach(function(m){
+  var cur='',rows='',nL=l.length;
+  l.slice(0,lim('materiel')).forEach(function(m){
     if(m.categorie!==cur){cur=m.categorie;rows+='<tr><td colspan="6" style="background:var(--surface-2);font-family:var(--font-display);font-weight:800">'+esc(cur||'Sans catégorie')+'</td></tr>';}
     var out=reservedMax(m.id,t,t,null),dispo=Math.max(0,dispoInfo(m)-out);
     rows+='<tr><td><span class="row-click" style="cursor:pointer;font-weight:600" data-action="edit-materiel" data-id="'+m.id+'">'+esc(m.nom)+'</span>'+(m.stockAVerifier?' <span class="chip sun">à renseigner</span>':'')+(m.certNom?' <span class="chip info" title="Document PDF enregistré">'+certKindM(m).court+'</span>':'')+'</td>'
@@ -1608,7 +1619,7 @@ function materielList(){
      +'<td class="num"><input class="stock-in" type="number" min="0" step="1" value="'+num(m.horsService)+'" data-stock="'+m.id+'" data-f="horsService" aria-label="Hors service : '+esc(m.nom)+'"></td>'
      +'<td class="num">'+out+'</td><td class="num"><b'+(dispo===0?' style="color:var(--bad)"':'')+'>'+dispo+'</b></td></tr>';
   });
-  return '<table><thead><tr><th>Article</th><th class="num">Prix</th><th class="num">Stock</th><th class="num">Hors service</th><th class="num">Dehors auj.</th><th class="num">Dispo auj.</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  return '<table><thead><tr><th>Article</th><th class="num">Prix</th><th class="num">Stock</th><th class="num">Hors service</th><th class="num">Dehors auj.</th><th class="num">Dispo auj.</th></tr></thead><tbody>'+rows+'</tbody></table>'+moreBtn('materiel',nL-lim('materiel'));
 }
 function priceLabel(m){
   if(m.prixMode==='devis'||m.prix==null)return '<span class="muted">Sur devis</span>';
@@ -1771,7 +1782,7 @@ function vReglages(){
 
 /* ---------- Fenêtres ---------- */
 function openModal(html){$('#modal-root').innerHTML='<div class="modal-bg" data-action="bg"><div class="modal" role="dialog" aria-modal="true">'+html+'</div></div>';var f=$('#modal-root input,#modal-root select,#modal-root textarea');if(f&&!/doc/.test(S.modal||''))try{f.focus();}catch(e){}}
-function closeModal(){$('#modal-root').innerHTML='';S.draft=null;S.modal=null;S.confirm='';}
+function closeModal(){photosStop();$('#modal-root').innerHTML='';S.draft=null;S.modal=null;S.confirm='';}
 function mhead(t){return '<div class="modal-h"><h2>'+esc(t)+'</h2><button class="icon-btn" data-action="close" aria-label="Fermer">'+ic('x')+'</button></div>';}
 
 /* --- Client --- */
@@ -2531,6 +2542,7 @@ var A={
   'edl-retenir':function(){var tot=casseTotal(S.draft.casses);$('#c-ret').value=tot;cautionResume();toast(tot>0?'Retenue : '+money(tot)+' (pensez à enregistrer)':'Aucune casse à retenir.');},
   'edl-casse-add':function(){S.draft.casses.push({designation:'',montant:''});$('#casses').innerHTML=casseRows();},
   'edl-casse-del':function(t){S.draft.casses.splice(+t.dataset.i,1);$('#casses').innerHTML=casseRows();cautionResume();},
+  'more':function(t){var k='lim_'+t.dataset.l;S.f[k]=lim(t.dataset.l)+LIM0;refreshList();},
   'edl-photo-del':function(t){S.db.collection('photos').doc(t.dataset.id).delete().then(function(){toast('Photo supprimée');}).catch(dbErr);},
   'edl-zoom':function(t){t.classList.toggle('zoom');},
   'edl-pdf':function(){downloadEdl();},
@@ -2682,7 +2694,7 @@ document.addEventListener('input',function(e){
   if(t.dataset&&t.dataset.tf==='nom'&&S.modal==='tour'){S.draft.nom=t.value;return;}
   if(t.dataset&&t.dataset.col){var o0={};o0[t.dataset.col]=t.value;S.set=Object.assign({},S.set,o0);applyTheme();return;}
   if(t.dataset.filter){
-    var k=t.dataset.filter;S.f[k]=t.type==='checkbox'?t.checked:t.value;
+    var k=t.dataset.filter;S.f[k]=t.type==='checkbox'?t.checked:t.value;resetLim();
     clearTimeout(FDB);FDB=setTimeout(refreshList,t.type==='search'||t.type==='text'?140:0);
     return;
   }
@@ -2712,7 +2724,7 @@ document.addEventListener('change',function(e){
   if(t.dataset&&t.dataset.pcAutre){PAYC.autre=t.value;renderPayCard(t.dataset.pcAutre);var ni=document.getElementById('pc-autre');if(ni){ni.focus();ni.setSelectionRange(ni.value.length,ni.value.length);}return;}
   if(t.id==='s-logo-file'){if(t.files&&t.files[0])readLogo(t.files[0]);return;}
   if(t.dataset&&t.dataset.col){var o1={};o1[t.dataset.col]=t.value;S.set=Object.assign({},S.set,o1);applyTheme();S.db.doc('config/societe').update(o1).then(function(){toast('Couleur enregistrée');}).catch(dbErr);return;}
-  if(t.dataset.filter&&t.tagName==='SELECT'){S.f[t.dataset.filter]=t.value;if(t.dataset.filter==='dtype'||t.dataset.filter==='statut'||t.dataset.filter==='cat'){var list=$('#list');if(list){if(S.view==='dossiers')list.innerHTML=dossierList();else if(S.view==='documents')list.innerHTML=docList();else if(S.view==='materiel')list.innerHTML=materielList();else if(S.view==='taches')list.innerHTML=tacheList();else if(S.view==='entretien')list.innerHTML=entretienList();}}return;}
+  if(t.dataset.filter&&t.tagName==='SELECT'){S.f[t.dataset.filter]=t.value;resetLim();if(t.dataset.filter==='dtype'||t.dataset.filter==='statut'||t.dataset.filter==='cat'){var list=$('#list');if(list){if(S.view==='dossiers')list.innerHTML=dossierList();else if(S.view==='documents')list.innerHTML=docList();else if(S.view==='materiel')list.innerHTML=materielList();else if(S.view==='taches')list.innerHTML=tacheList();else if(S.view==='entretien')list.innerHTML=entretienList();}}return;}
   if(t.dataset.cx){var cc=byId(S.caisses,t.dataset.id);if(cc){var upx={};upx[t.dataset.cx]=t.value;cc[t.dataset.cx]=t.value;cxRefresh(cc);S.db.collection('caisses').doc(cc.id).update(upx).catch(dbErr);}return;}
   if(t.dataset.stock){
     var v=Math.max(0,Math.round(num(t.value)));t.value=v;
@@ -2736,6 +2748,6 @@ document.addEventListener('change',function(e){
 initDb();
 render();
 function loadScript(u,cb){var e=document.createElement('script');e.src=u;e.onload=cb;document.head.appendChild(e);}
-setTimeout(function(){loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',function(){loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');});},400);
+(function(){var w=setInterval(function(){if(!S.ready)return;clearInterval(w);var go=function(){loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',function(){loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');});};if(window.requestIdleCallback)requestIdleCallback(go,{timeout:5000});else setTimeout(go,2000);},300);})();
 })();
 </script>
