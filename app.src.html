@@ -1066,9 +1066,10 @@ function certBlock(m){
   var dr=S.certDraft,nom=null,taille=0;
   if(dr&&dr!=='del'){nom=dr.nom;taille=dr.taille;}else if(dr!=='del'&&m&&m.certNom){nom=m.certNom;taille=m.certTaille||0;}
   var inp='<input type="file" accept="application/pdf,.pdf" hidden data-m-cert="1">';
-  if(!nom)return '<label class="btn btn-sm" style="cursor:pointer">'+ic('plus')+'Ajouter le certificat (PDF)'+inp+'</label><div class="small muted" style="margin-top:6px">PDF de 1 Mo maximum. Joignable au devis sur demande.</div>';
+  if(!nom)return '<label class="btn btn-sm" style="cursor:pointer">'+ic('plus')+'Ajouter le certificat (PDF)'+inp+'</label><div class="small muted" style="margin-top:6px">Pour les structures gonflables, toboggans et parcours. PDF de 1 Mo maximum, joignable au devis sur demande.</div>';
   return '<div class="row" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="chip info">PDF</span><b style="min-width:0;overflow-wrap:anywhere">'+esc(nom)+'</b><span class="small muted">'+Math.max(1,Math.round(taille/1024))+' Ko'+(dr&&dr!=='del'?' · à enregistrer':'')+'</span></div><div class="toolbar" style="margin:6px 0 0"><label class="btn btn-sm" style="cursor:pointer">Remplacer'+inp+'</label><button class="btn btn-sm btn-danger" type="button" data-action="m-cert-del">Retirer</button></div>';
 }
+function certVisible(cat){var m=S.draft||{};return /gonflable|toboggan|parcours/i.test(String(cat||''))||!!m.certNom||!!(S.certDraft&&S.certDraft!=='del');}
 function certRefresh(){var el=document.getElementById('m-cert');if(el)el.innerHTML=certBlock(S.draft);}
 function certPick(files){
   var f=files&&files[0];if(!f)return;
@@ -1477,7 +1478,7 @@ function openMateriel(id){
    +'<div class="field"><label for="m-unite">Facturé par</label><input id="m-unite" value="'+esc(m.unite||'location')+'" placeholder="location, week-end, pièce…"></div>'
    +'<div class="field"><label for="m-stock">Quantité en stock</label><input id="m-stock" type="number" min="0" step="1" value="'+num(m.stock)+'"></div>'
    +'<div class="field"><label for="m-hs">Hors service</label><input id="m-hs" type="number" min="0" step="1" value="'+num(m.horsService)+'"></div>'
-   +'<div class="field"><label for="m-caution">Caution (€)</label><input id="m-caution" type="number" min="0" step="1" value="'+(m.caution==null?'':esc(m.caution))+'"></div><div class="field"><label for="m-achat">Coût d\'achat total (€, toutes pièces)</label><input id="m-achat" type="number" min="0" step="0.01" value="'+(m.coutAchat==null?'':esc(m.coutAchat))+'" placeholder="Pour calculer l\'amortissement"></div></div><div class="field"><label for="m-notes">Notes (dimensions, capacité, montage…)</label><textarea id="m-notes">'+esc(m.notes)+'</textarea></div><div class="field"><label>Certificat de conformité de la structure (PDF)</label><div id="m-cert">'+certBlock(m)+'</div></div></div>'
+   +'<div class="field"><label for="m-caution">Caution (€)</label><input id="m-caution" type="number" min="0" step="1" value="'+(m.caution==null?'':esc(m.caution))+'"></div><div class="field"><label for="m-achat">Coût d\'achat total (€, toutes pièces)</label><input id="m-achat" type="number" min="0" step="0.01" value="'+(m.coutAchat==null?'':esc(m.coutAchat))+'" placeholder="Pour calculer l\'amortissement"></div></div><div class="field"><label for="m-notes">Notes (dimensions, capacité, montage…)</label><textarea id="m-notes">'+esc(m.notes)+'</textarea></div><div class="field" id="m-cert-wrap"'+(certVisible(m.categorie)?'':' hidden')+'><label>Certificat de conformité de la structure (PDF)</label><div id="m-cert">'+certBlock(m)+'</div></div></div>'
    +'<div class="modal-f">'+(id?'<button class="btn btn-danger" data-action="del-materiel" style="margin-right:auto">'+(S.confirm==='materiel'?'Confirmer la suppression':'Supprimer')+'</button>':'')+'<button class="btn" data-action="close">Annuler</button><button class="btn btn-primary" data-action="save-materiel">Enregistrer</button></div>');
 }
 function saveMateriel(){
@@ -2341,6 +2342,7 @@ function refreshList(){var list=$('#list');if(!list)return;
   if(S.view==='dossiers')list.innerHTML=dossierList();else if(S.view==='documents')list.innerHTML=docList();else if(S.view==='clients')list.innerHTML=clientList();else if(S.view==='materiel')list.innerHTML=materielList();else if(S.view==='taches')list.innerHTML=tacheList();else if(S.view==='entretien')list.innerHTML=entretienList();}
 document.addEventListener('input',function(e){
   var t=e.target;
+  if(t.id==='m-cat'&&S.modal==='materiel'){var w=document.getElementById('m-cert-wrap');if(w)w.hidden=!certVisible(t.value);return;}
   if(t.dataset&&t.dataset.casse!==undefined&&S.draft&&S.draft.casses){var ci=+t.dataset.casse;if(S.draft.casses[ci])S.draft.casses[ci][t.dataset.k]=t.dataset.k==='montant'?t.value:t.value;return;}
   if(t.id==='c-mont'||t.id==='c-ret'){cautionResume();return;}
   if(t.dataset&&t.dataset.tf==='nom'&&S.modal==='tour'){S.draft.nom=t.value;return;}

@@ -16,14 +16,16 @@ try {
   await page.evaluate(async () => {
     const db = await window.claude.use('db');
     await db.collection('clients').doc('c1').set({ nom: 'Martin', type: 'particulier' });
-    await db.collection('materiel').doc('m1').set({ nom: 'Chapiteau 5x8', prix: 300, stock: 2, unite: 'location' });
-    await db.collection('materiel').doc('m2').set({ nom: 'Table', prix: 10, stock: 5, unite: 'location' });
+    await db.collection('materiel').doc('m1').set({ nom: 'Chapiteau 5x8', categorie: 'Structures gonflables', prix: 300, stock: 2, unite: 'location' });
+    await db.collection('materiel').doc('m2').set({ nom: 'Table', categorie: 'Mobilier', prix: 10, stock: 5, unite: 'location' });
     const lg = [{ materielId: 'm1', designation: 'Chapiteau 5x8', qte: 1, puHT: 300, tva: 20 }, { materielId: 'm2', designation: 'Table', qte: 2, puHT: 10, tva: 20 }];
     await db.collection('documents').doc('dv').set({ type: 'devis', numero: 'D-1', clientId: 'c1', clientSnap: { nom: 'Martin' }, societeSnap: { nom: 'GO' }, lignes: lg, totaux: { ht: 320, ttc: 384, detail: [{ taux: 20, montant: 64 }] }, regimeTva: 'normal', statut: 'envoye', dateEmission: '2026-10-01', dateValidite: '2026-12-01', dateDebut: '2026-11-01', dateFin: '2026-11-02', titre: 'Fête' });
   });
   await page.click('nav.nav button:has-text("Matériel")');
   await page.click('[data-action="edit-materiel"]:has-text("Chapiteau")');
   await page.getByText('Certificat de conformité de la structure').waitFor();
+  await page.fill('#m-cat', 'Mobilier'); assert.equal(await page.locator('#m-cert-wrap').isHidden(), true, 'masqué hors gonflables');
+  for (const c of ['Toboggans', 'Parcours enfants', 'Structures gonflables']) { await page.fill('#m-cat', c); assert.equal(await page.locator('#m-cert-wrap').isVisible(), true, c); }
   // fichier trop lourd refusé
   await page.setInputFiles('input[data-m-cert]', SP + '/gros.pdf');
   await page.getByText('PDF trop lourd').waitFor();
