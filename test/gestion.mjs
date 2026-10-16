@@ -78,17 +78,27 @@ try {
   assert.ok(csv.split('\n')[0].includes('TVA 5,5 %') && csv.includes('Virement') && csv.includes('Total hors annulées;;;;400,00'), csv);
   await page.click('[data-action="export-mail"]');
   await page.waitForSelector('#ex-note a[href^="mailto:compta"]');
-  // tournée
-  await page.click('nav.nav button:has-text("Tournée")');
+  // tournées : création par sélection, boucle, matériel à emmener
+  await page.click('nav.nav button:has-text("Tournées")');
   await page.fill('[data-tour="day"]', await page.evaluate(() => window.__f(1)));
   await page.getByText('Fête A').first().waitFor();
-  const names = async () => (await page.locator('.card.card-pad b').allInnerTexts());
-  assert.deepEqual((await names()).slice(0, 2), ['Fête A', 'Fête B']);
-  const href = await page.locator('a:has-text("Ouvrir l\'itinéraire")').getAttribute('href');
-  assert.ok(href.includes('origin=1%20rue%20du%20D') && href.includes('waypoints=5%20rue%20des%20Lilas'), href);
-  await page.locator('[data-action="tour-move"][data-n="1"]').first().click();
-  await page.waitForTimeout(400);
-  assert.deepEqual((await names()).slice(0, 2), ['Fête B', 'Fête A']);
-  assert.ok(await page.locator('.card:has-text("À charger") >> text=× 4').count(), 'à charger 2+2');
+  await page.locator('.page-head [data-action="tour-new"]').click();
+  await page.waitForSelector('#t-nom');
+  await page.fill('#t-nom', 'Matin');
+  await page.check('[data-tsel="liv:dB"]'); await page.check('[data-tsel="liv:dA"]');
+  assert.ok(await page.locator('.dsec:has-text("Ordre de passage") >> text=Fête B').count());
+  assert.ok(await page.locator('.dsec:has-text("Matériel") .list-row:has-text("Château gonflable") >> text=× 4').count(), 'matériel à emmener 2+2');
+  await page.locator('[data-action="tour-ord"][data-n="1"]').first().click();
+  await page.click('[data-action="tour-save"]');
+  await page.getByText('Boucle avec retour au dépôt', { exact: false }).first().waitFor();
+  const href = await page.locator('a:has-text("Itinéraire")').getAttribute('href');
+  assert.ok(href.includes('origin=1%20rue%20du%20D') && href.includes('destination=1%20rue%20du%20D') && href.includes('waypoints=5%20rue%20des%20Lilas'), href);
+  assert.ok(href.indexOf('5%20rue%20des%20Lilas') < href.indexOf('9%20place%20du%20March'), 'ordre modifié : A puis B');
+  await page.evaluate(() => { window.__txt.length = 0; });
+  await page.click('[data-action="tour-pdf"]'); await page.waitForTimeout(500);
+  const tp = await page.evaluate(() => window.__txt);
+  assert.ok(tp.includes('FEUILLE DE TOURNÉE') && tp.some(x => x.includes('Château gonflable  ×  4')), JSON.stringify(tp));
+  await page.click('[data-action="tour-del"]'); await page.click('[data-action="tour-del"]');
+  await page.waitForSelector('text=Tournée supprimée');
   console.log('Gestion : OK');
 } catch (e) { console.error('ÉCHEC', e.message.split('\n')[0], e.stack.split('\n').filter(l => l.includes('test/gestion')).slice(0,2), errs); process.exitCode = 1; } finally { await browser.close(); server.close(); }
