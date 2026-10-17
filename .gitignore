@@ -2,3 +2,6 @@ node_modules
 .netlify
 public/index.html
 undefined/
+public/mentions-legales.html
+public/conditions.html
+public/confidentialite.html

@@ -50,3 +50,4 @@ const head = `<!doctype html>
 fs.mkdirSync(new URL('../public', import.meta.url), { recursive: true });
 fs.writeFileSync(new URL('../public/index.html', import.meta.url), head + s + '\n</body>\n</html>\n');
 console.log('public/index.html généré (' + Math.round((head.length + s.length) / 1024) + ' Ko)');
+await import('./legal.mjs'); // pages légales
