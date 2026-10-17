@@ -52,6 +52,17 @@
     '.lp-final{background:linear-gradient(160deg,var(--l-navy),#03223A);color:#fff;text-align:center}.lp-final .lp-wrap{padding-block:64px}.lp-final h2{font-size:clamp(26px,4vw,38px)}.lp-final p{margin:14px auto 0;max-width:34em;color:#C9DAE4}.lp-final .lp-cta{justify-content:center}' +
     '#web-landing .lp-fast{display:inline-block;margin-top:22px;padding:10px 18px;border-radius:999px;background:var(--l-navy);color:#fff;font-weight:600;font-size:15px}' +
     '.lp-foot{padding-block:24px;font-size:13px;color:var(--l-muted);text-align:center}.lp-foot .lp-wrap{display:grid;gap:4px}' +
+    /* formulaire d'inscription */
+    '#lp-final{scroll-margin-top:58px}' +
+    '.lp-form{margin:28px auto 0;max-width:640px;text-align:left;background:var(--l-surface);color:var(--l-ink);border:1px solid var(--l-line);border-radius:18px 4px 18px 4px;padding:22px;display:grid;gap:14px}' +
+    '.lp-form .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}.lp-form label{display:grid;gap:5px;font:600 14px Inter,system-ui,sans-serif;min-width:0}' +
+    '.lp-form input,.lp-form select,.lp-form textarea{font:400 16px Inter,system-ui,sans-serif;color:var(--l-ink);background:var(--l-bg);border:1px solid var(--l-line);border-radius:10px;padding:11px 12px;min-height:46px;width:100%;min-width:0}' +
+    '.lp-form textarea{min-height:96px;resize:vertical}.lp-form input:focus-visible,.lp-form select:focus-visible,.lp-form textarea:focus-visible{outline:3px solid var(--l-gold);outline-offset:1px}' +
+    '.lp-form .chk{display:flex;gap:10px;align-items:flex-start;font-weight:400;font-size:13px;color:var(--l-muted)}.lp-form .chk input{width:20px;min-height:20px;margin-top:2px;flex:none}' +
+    '.lp-form .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}.lp-form .msg{font-size:14px;min-height:20px}.lp-form .msg.bad{color:#B93232}' +
+    '.lp-form .lp-btn{justify-self:start}.lp-form .lp-btn[disabled]{opacity:.6;cursor:default}' +
+    '.lp-thanks{margin:28px auto 0;max-width:640px;background:var(--l-surface);color:var(--l-ink);border:1px solid var(--l-line);border-radius:18px 4px 18px 4px;padding:26px;text-align:center}.lp-thanks h3{font-size:22px;margin-bottom:8px}' +
+    '@media (max-width:560px){.lp-form .two{grid-template-columns:1fr}}' +
     '@media (max-width:480px){.lp-brand small{display:none}.lp-btn{padding:0 16px}}' +
     '@media (max-width:860px){.lp-hero .lp-wrap{grid-template-columns:1fr;padding-block:40px 48px;gap:32px}.lp-mock{margin:0 auto;transform:none}.lp-grid,.lp-steps{grid-template-columns:1fr}.lp-pain{grid-template-columns:1fr}.lp-sec{padding-block:44px}}' +
     '@media (min-width:600px) and (max-width:860px){.lp-grid{grid-template-columns:1fr 1fr}}' +
@@ -69,6 +80,39 @@
     palette: ic('<path d="M12 3a9 9 0 0 0 0 18c1.2 0 1.8-.8 1.8-1.7 0-.9-.6-1.3-.6-2.2 0-.9.7-1.6 1.6-1.6H17a4 4 0 0 0 4-4C21 6.8 17 3 12 3z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10.5" cy="7.5" r="1"/><circle cx="15" cy="7.8" r="1"/>'),
     lock: ic('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>')
   };
+
+
+  var SECTEURS = ['Location de matériel évènementiel', 'Jeux gonflables et animations', 'Tentes, mobilier et décoration', 'Sono, lumière et scène', 'Traiteur et matériel de réception', 'Matériel de BTP et outillage', 'Autre'];
+  var PARCS = ['Moins de 50 articles', 'De 50 à 200 articles', 'Plus de 200 articles'];
+  function opts(a) { return '<option value="">Choisis…</option>' + a.map(function (x) { return '<option>' + x + '</option>'; }).join(''); }
+  function formHtml() {
+    return '<form class="lp-form" id="lp-form" name="inscription" novalidate>' +
+      '<p class="hp" aria-hidden="true"><label>Ne pas remplir <input name="bot-field" tabindex="-1" autocomplete="off"></label></p>' +
+      '<div class="two"><label>Ton prénom et nom *<input name="nom" required autocomplete="name" maxlength="80"></label><label>Ta société<input name="societe" autocomplete="organization" maxlength="80"></label></div>' +
+      '<div class="two"><label>Ton secteur d’activité *<select name="secteur" required>' + opts(SECTEURS) + '</select></label><label>Taille de ton parc de matériel<select name="parc">' + opts(PARCS) + '</select></label></div>' +
+      '<div class="two"><label>Ton e-mail *<input name="email" type="email" required autocomplete="email" inputmode="email" maxlength="120"></label><label>Ton téléphone<input name="telephone" type="tel" autocomplete="tel" inputmode="tel" maxlength="30"></label></div>' +
+      '<label>Ce que tu aimerais gérer avec l’appli<textarea name="message" maxlength="1500" placeholder="Devis, stock, planning, caisse d’évènement…"></textarea></label>' +
+      '<label class="chk"><input type="checkbox" name="consentement" value="oui" required><span>J’accepte d’être recontacté pour cette demande. Ces informations ne servent qu’à te répondre et ne sont pas transmises à des tiers.</span></label>' +
+      '<div class="msg" id="lp-msg" role="status" aria-live="polite"></div>' +
+      '<button class="lp-btn gold" type="submit">Envoyer ma demande</button></form>';
+  }
+  function bindForm(el) {
+    var f = el.querySelector('#lp-form'); if (!f) return;
+    f.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var msg = el.querySelector('#lp-msg'), btn = f.querySelector('button[type=submit]');
+      var d = new FormData(f), mail = String(d.get('email') || '').trim();
+      if (!String(d.get('nom') || '').trim() || !d.get('secteur') || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(mail) || !d.get('consentement')) {
+        msg.className = 'msg bad'; msg.textContent = 'Merci de renseigner ton nom, ton secteur, un e-mail valide et d’accepter d’être recontacté.'; return;
+      }
+      if (d.get('bot-field')) { f.outerHTML = '<div class="lp-thanks"><h3>Merci !</h3></div>'; return; }
+      d.append('form-name', 'inscription'); btn.disabled = true; msg.className = 'msg'; msg.textContent = 'Envoi en cours…';
+      var body = new URLSearchParams(); d.forEach(function (v, k) { body.append(k, String(v)); });
+      fetch('/', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() })
+        .then(function (r) { if (!r.ok) throw new Error('http'); f.outerHTML = '<div class="lp-thanks" id="lp-thanks" role="status"><h3>Merci, c’est bien reçu !</h3><p>On te répond par e-mail en quelques jours, souvent dans l’heure.</p></div>'; })
+        .catch(function () { btn.disabled = false; msg.className = 'msg bad'; msg.innerHTML = 'L’envoi a échoué. Réessaie, ou écris-nous à <a href="mailto:' + CONTACT + '">' + CONTACT + '</a>.'; });
+    });
+  }
 
   function html() {
     var feat = [
@@ -88,7 +132,7 @@
       '<span class="lp-kicker">Gestion pour loueurs de matériel</span>' +
       '<h1>Ta location de matériel, <em>enfin sous contrôle</em>.</h1>' +
       '<p class="lead">Devis, factures, stock, clients, paiements et caisse d’évènement. Tout dans une seule appli, sur ton téléphone comme sur ton ordinateur. Pensée par un loueur, pour les loueurs.</p>' +
-      '<div class="lp-cta"><a class="lp-btn gold" href="mailto:' + CONTACT + '?subject=' + encodeURIComponent('Démo de ' + NOM) + '">Demander une démo</a><button class="lp-btn ghost" data-lp="login" type="button">J’ai déjà un compte</button></div>' +
+      '<div class="lp-cta"><button class="lp-btn gold" data-lp="form" type="button">S’inscrire ou demander une démo</button><button class="lp-btn ghost" data-lp="login" type="button">J’ai déjà un compte</button></div>' +
       '<p class="lp-note">Pas de logiciel à installer : ça s’ouvre dans le navigateur. Tout est personnalisable selon tes besoins, et chaque demande est traitée en quelques jours, parfois dans l’heure.</p></div>' +
       '<div class="lp-mock" role="img" aria-label="Exemple de devis dans l’application"><div class="top"><span class="tag">Devis</span><span>Exemple</span></div>' +
       '<h3>Mariage de Camille et Hugo</h3><div class="sub">Samedi · 120 invités</div>' +
@@ -112,9 +156,9 @@
       '<article class="lp-card"><div class="ic">' + ICONS.lock + '</div><h3>Tes données t’appartiennent</h3><p>Connexion sécurisée par mot de passe, données hébergées en ligne, export possible à tout moment.</p></article></div></div></section>' +
 
       '<section class="lp-sec alt"><div class="lp-wrap" style="text-align:center"><h2>Une appli qui s’adapte à toi, pas l’inverse</h2><p class="intro" style="margin-inline:auto">Chaque loueur travaille à sa façon. Tout est personnalisable selon tes besoins: l’identité visuelle, le catalogue, les tarifs, les documents et les fonctions utiles à ton activité.</p><p class="lp-fast">Toute demande est créée ou modifiée en quelques jours, parfois même dans l’heure.</p></div></section>' +
-      '<section class="lp-final"><div class="lp-wrap"><h2>Prêt à gagner du temps sur chaque location ?</h2><p>Dis-nous comment tu travailles, on te montre l’appli en direct sur un cas réel.</p>' +
-      '<div class="lp-cta"><a class="lp-btn gold" href="mailto:' + CONTACT + '?subject=' + encodeURIComponent('Démo de ' + NOM) + '">Demander une démo</a><button class="lp-btn ghost" data-lp="login" type="button">Se connecter</button></div>' +
-      '<p style="font-size:14px;margin-top:16px">Ou écris-nous directement : <a href="mailto:' + CONTACT + '">' + CONTACT + '</a></p></div></section>' +
+      '<section class="lp-final" id="lp-final"><div class="lp-wrap"><h2>Prêt à gagner du temps sur chaque location ?</h2><p>Dis-nous qui tu es et comment tu travailles : on crée ton compte et on te montre l’appli en direct sur un cas réel.</p>' + formHtml() +
+      '<p style="font-size:14px;margin-top:18px">Tu as déjà un compte ? <button class="lp-btn ghost" data-lp="login" type="button" style="min-height:38px;margin-left:6px">Se connecter</button></p>' +
+      '<p style="font-size:14px;margin-top:12px">Ou écris-nous directement : <a href="mailto:' + CONTACT + '">' + CONTACT + '</a></p></div></section>' +
       '</main><footer class="lp-foot"><div class="lp-wrap"><div>' + NOM + ' ' + SIGNATURE + '</div><div>Conçu en Normandie pour les loueurs de matériel évènementiel.</div></div></footer>';
   }
 
@@ -129,9 +173,12 @@
     var old = document.getElementById('web-landing'); if (old) old.remove();
     var el = document.createElement('div'); el.id = 'web-landing'; el.innerHTML = html();
     el.addEventListener('click', function (e) {
+      var g = e.target.closest ? e.target.closest('[data-lp="form"]') : null;
+      if (g) { e.preventDefault(); var t = el.querySelector('#lp-final'); if (t) { t.scrollIntoView({ behavior: 'smooth', block: 'start' }); setTimeout(function () { var i = el.querySelector('#lp-form input[name=nom]'); if (i) i.focus({ preventScroll: true }); }, 500); } return; }
       var b = e.target.closest ? e.target.closest('[data-lp="login"]') : null;
       if (b) { e.preventDefault(); el.remove(); onLogin(); }
     });
+    bindForm(el);
     document.body.appendChild(el);
     document.title = NOM + ' · Gestion de location de matériel';
   }

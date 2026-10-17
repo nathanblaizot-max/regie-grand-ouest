@@ -42,6 +42,8 @@ const head = `<!doctype html>
 <style>:root{color-scheme:light;padding-block:env(safe-area-inset-top,0px) env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
+<!-- Formulaire d'inscription : copie statique pour que Netlify Forms le détecte (l'affichage réel est dans landing.js) -->
+<form name="inscription" data-netlify="true" netlify-honeypot="bot-field" hidden><input name="bot-field"><input name="nom"><input name="societe"><input name="secteur"><input name="parc"><input name="email"><input name="telephone"><textarea name="message"></textarea><input name="consentement"></form>
 <script src="/landing.js"></script>
 <script src="/web.js"></script>
 `;
