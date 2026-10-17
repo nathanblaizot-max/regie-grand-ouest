@@ -79,7 +79,7 @@ try {
   await page.click('[data-action="export-mail"]');
   await page.waitForSelector('#ex-note a[href^="mailto:compta"]');
   // tournées : création par sélection, boucle, matériel à emmener
-  await page.click('nav.nav button:has-text("Tournées")');
+  await page.click('nav.nav button:has-text("Planning")'); await page.click('.subtabs button:has-text("Tournées")');
   await page.fill('[data-tour="day"]', await page.evaluate(() => window.__f(1)));
   await page.getByText('Fête A').first().waitFor();
   await page.locator('.page-head [data-action="tour-new"]').click();

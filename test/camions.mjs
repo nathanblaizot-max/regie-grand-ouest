@@ -22,7 +22,7 @@ try {
     const lg = [{ materielId: 'm1', designation: 'Château', qte: 1, puHT: 100, tva: 20 }];
     await db.collection('dossiers').doc('dA').set({ titre: 'Fête A', statut: 'confirmee', clientId: 'c1', dateDebut: f(0), dateFin: f(1), lieu: '5 rue des Lilas, Coutances', lignes: lg });
   });
-  await page.click('nav.nav button:has-text("Tournées")');
+  await page.click('nav.nav button:has-text("Planning")'); await page.click('.subtabs button:has-text("Tournées")');
   await page.getByText('Fête A').first().waitFor();
   // ajout de camions (barème : 5 CV, > 20 000 km => 0,427 €/km)
   await page.click('[data-action="veh-open"]');
