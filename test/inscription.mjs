@@ -14,6 +14,9 @@ try {
   await fetch('http://127.0.0.1:' + port + '/api/setup', { method: 'POST', headers: { 'content-type': 'application/json', 'x-requested-with': 'regie' }, body: JSON.stringify({ code: 'TESTCODE', name: 'N', email: 'n@t.fr', password: 'motdepasse1' }) }); // un compte existe : la page d'accueil s'affiche aux visiteurs
   const page = await (await browser.newContext({ viewport: { width: 400, height: 800 } })).newPage();
   await page.goto('http://127.0.0.1:' + port + '/'); await page.waitForSelector('#web-landing');
+  // tarif affiché
+  const tarif = (await page.textContent('#lp-tarif')).replace(/\s+/g, ' ');
+  assert.match(tarif, /39,99/); assert.match(tarif, /7 jours d’essai gratuit/); assert.match(tarif, /Annulable à tout moment/); assert.match(tarif, /système de paiement/);
   // le bouton du haut mène au formulaire
   await page.click('.lp-hero [data-lp=form]'); await page.waitForTimeout(900);
   assert.ok(await page.isVisible('#lp-form input[name=nom]'));

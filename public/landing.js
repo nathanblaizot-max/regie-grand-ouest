@@ -52,6 +52,13 @@
     '.lp-final{background:linear-gradient(160deg,var(--l-navy),#03223A);color:#fff;text-align:center}.lp-final .lp-wrap{padding-block:64px}.lp-final h2{font-size:clamp(26px,4vw,38px)}.lp-final p{margin:14px auto 0;max-width:34em;color:#C9DAE4}.lp-final .lp-cta{justify-content:center}' +
     '#web-landing .lp-fast{display:inline-block;margin-top:22px;padding:10px 18px;border-radius:999px;background:var(--l-navy);color:#fff;font-weight:600;font-size:15px}' +
     '.lp-foot{padding-block:24px;font-size:13px;color:var(--l-muted);text-align:center}.lp-foot .lp-wrap{display:grid;gap:4px}' +
+    /* tarif */
+    '.lp-price{margin:32px auto 0;max-width:460px;background:var(--l-surface);border:2px solid var(--l-navy);border-radius:20px 4px 20px 4px;padding:28px;text-align:center;position:relative}' +
+    '.lp-price .badge{position:absolute;top:-14px;left:50%;transform:translateX(-50%);white-space:nowrap;background:var(--l-gold);color:var(--l-gold-ink);font:700 13px Inter,system-ui,sans-serif;letter-spacing:.04em;text-transform:uppercase;padding:6px 14px;border-radius:999px}' +
+    '.lp-price .amt{font:700 clamp(44px,9vw,60px)/1 Fraunces,Georgia,serif;color:var(--l-ink);font-variant-numeric:tabular-nums;margin-top:8px}.lp-price .amt small{font:500 18px Inter,system-ui,sans-serif;color:var(--l-muted)}' +
+    '.lp-price ul{list-style:none;margin:20px 0 0;padding:0;display:grid;gap:11px;text-align:left}.lp-price li{display:flex;gap:10px;font-size:15.5px;min-width:0}' +
+    '.lp-price li:before{content:"✓";flex:none;width:22px;height:22px;border-radius:50%;background:var(--l-navy);color:var(--l-gold);display:grid;place-items:center;font-size:13px;font-weight:700;margin-top:1px}' +
+    '.lp-price .lp-btn{margin-top:24px;width:100%}.lp-price .fine{margin-top:12px;font-size:13px;color:var(--l-muted)}' +
     /* formulaire d'inscription */
     '#lp-final{scroll-margin-top:58px}' +
     '.lp-form{margin:28px auto 0;max-width:640px;text-align:left;background:var(--l-surface);color:var(--l-ink);border:1px solid var(--l-line);border-radius:18px 4px 18px 4px;padding:22px;display:grid;gap:14px}' +
@@ -94,7 +101,7 @@
       '<label>Ce que tu aimerais gérer avec l’appli<textarea name="message" maxlength="1500" placeholder="Devis, stock, planning, caisse d’évènement…"></textarea></label>' +
       '<label class="chk"><input type="checkbox" name="consentement" value="oui" required><span>J’accepte d’être recontacté pour cette demande. Ces informations ne servent qu’à te répondre et ne sont pas transmises à des tiers.</span></label>' +
       '<div class="msg" id="lp-msg" role="status" aria-live="polite"></div>' +
-      '<button class="lp-btn gold" type="submit">Envoyer ma demande</button></form>';
+      '<button class="lp-btn gold" type="submit">Demander mon essai gratuit</button></form>';
   }
   function bindForm(el) {
     var f = el.querySelector('#lp-form'); if (!f) return;
@@ -132,8 +139,8 @@
       '<span class="lp-kicker">Gestion pour loueurs de matériel</span>' +
       '<h1>Ta location de matériel, <em>enfin sous contrôle</em>.</h1>' +
       '<p class="lead">Devis, factures, stock, clients, paiements et caisse d’évènement. Tout dans une seule appli, sur ton téléphone comme sur ton ordinateur. Pensée par un loueur, pour les loueurs.</p>' +
-      '<div class="lp-cta"><button class="lp-btn gold" data-lp="form" type="button">S’inscrire ou demander une démo</button><button class="lp-btn ghost" data-lp="login" type="button">J’ai déjà un compte</button></div>' +
-      '<p class="lp-note">Pas de logiciel à installer : ça s’ouvre dans le navigateur. Tout est personnalisable selon tes besoins, et chaque demande est traitée en quelques jours, parfois dans l’heure.</p></div>' +
+      '<div class="lp-cta"><button class="lp-btn gold" data-lp="form" type="button">Essayer gratuitement 7 jours</button><button class="lp-btn ghost" data-lp="login" type="button">J’ai déjà un compte</button></div>' +
+      '<p class="lp-note">Pas de logiciel à installer : ça s’ouvre dans le navigateur. 7 jours d’essai gratuit, puis 39,99 € par mois, annulable à tout moment.</p></div>' +
       '<div class="lp-mock" role="img" aria-label="Exemple de devis dans l’application"><div class="top"><span class="tag">Devis</span><span>Exemple</span></div>' +
       '<h3>Mariage de Camille et Hugo</h3><div class="sub">Samedi · 120 invités</div>' +
       '<div style="margin-top:10px"><div class="row"><span>Tente de réception 5 × 6 m</span><span>220,00 €</span></div><div class="row"><span>Tables et bancs × 15</span><span>135,00 €</span></div><div class="row"><span>Livraison et reprise</span><span>45,00 €</span></div></div>' +
@@ -156,7 +163,12 @@
       '<article class="lp-card"><div class="ic">' + ICONS.lock + '</div><h3>Tes données t’appartiennent</h3><p>Connexion sécurisée par mot de passe, données hébergées en ligne, export possible à tout moment.</p></article></div></div></section>' +
 
       '<section class="lp-sec alt"><div class="lp-wrap" style="text-align:center"><h2>Une appli qui s’adapte à toi, pas l’inverse</h2><p class="intro" style="margin-inline:auto">Chaque loueur travaille à sa façon. Tout est personnalisable selon tes besoins: l’identité visuelle, le catalogue, les tarifs, les documents et les fonctions utiles à ton activité.</p><p class="lp-fast">Toute demande est créée ou modifiée en quelques jours, parfois même dans l’heure.</p></div></section>' +
-      '<section class="lp-final" id="lp-final"><div class="lp-wrap"><h2>Prêt à gagner du temps sur chaque location ?</h2><p>Dis-nous qui tu es et comment tu travailles : on crée ton compte et on te montre l’appli en direct sur un cas réel.</p>' + formHtml() +
+      '<section class="lp-sec" id="lp-tarif"><div class="lp-wrap" style="text-align:center"><h2>Un seul forfait, tout compris</h2><p class="intro" style="margin-inline:auto">Pas de formule compliquée ni d’options cachées : tu as accès à tout, dès le premier jour.</p>' +
+      '<div class="lp-price"><span class="badge">7 jours d’essai gratuit</span><div class="amt">39,99&nbsp;€ <small>par mois</small></div>' +
+      '<ul><li>Accès à la totalité du site internet et de ses fonctionnalités : devis, factures, stock, clients, planning, caisse</li><li>Accès au système de paiement</li><li>7 jours pour essayer l’appli gratuitement</li><li>Annulable à tout moment, sans engagement</li></ul>' +
+      '<button class="lp-btn gold" data-lp="form" type="button">Commencer l’essai gratuit</button><p class="fine">Tu peux arrêter quand tu veux, directement depuis ton compte ou en nous écrivant.</p></div></div></section>' +
+
+      '<section class="lp-final" id="lp-final"><div class="lp-wrap"><h2>Prêt à gagner du temps sur chaque location ?</h2><p>Dis-nous qui tu es et comment tu travailles : on crée ton compte pour ton essai gratuit de 7 jours et on te montre l’appli en direct sur un cas réel.</p>' + formHtml() +
       '<p style="font-size:14px;margin-top:18px">Tu as déjà un compte ? <button class="lp-btn ghost" data-lp="login" type="button" style="min-height:38px;margin-left:6px">Se connecter</button></p>' +
       '<p style="font-size:14px;margin-top:12px">Ou écris-nous directement : <a href="mailto:' + CONTACT + '">' + CONTACT + '</a></p></div></section>' +
       '</main><footer class="lp-foot"><div class="lp-wrap"><div>' + NOM + ' ' + SIGNATURE + '</div><div>Conçu en Normandie pour les loueurs de matériel évènementiel.</div></div></footer>';
