@@ -51,6 +51,7 @@
     '#web-landing .lp-step h3{font-size:17px;margin-bottom:4px}.lp-step p{font-size:15px;color:var(--l-muted)}' +
     '.lp-final{background:linear-gradient(160deg,var(--l-navy),#03223A);color:#fff;text-align:center}.lp-final .lp-wrap{padding-block:64px}.lp-final h2{font-size:clamp(26px,4vw,38px)}.lp-final p{margin:14px auto 0;max-width:34em;color:#C9DAE4}.lp-final .lp-cta{justify-content:center}' +
     '#web-landing .lp-fast{display:inline-block;margin-top:22px;padding:10px 18px;border-radius:999px;background:var(--l-navy);color:#fff;font-weight:600;font-size:15px}' +
+    '.lp-legal{margin-top:6px}.lp-legal a{text-decoration:underline;text-underline-offset:3px}' +
     '.lp-foot{padding-block:24px;font-size:13px;color:var(--l-muted);text-align:center}.lp-foot .lp-wrap{display:grid;gap:4px}' +
     /* tarif */
     '.lp-price{margin:32px auto 0;max-width:460px;background:var(--l-surface);border:2px solid var(--l-navy);border-radius:20px 4px 20px 4px;padding:28px;text-align:center;position:relative}' +
@@ -99,7 +100,7 @@
       '<div class="two"><label>Ton secteur d’activité *<select name="secteur" required>' + opts(SECTEURS) + '</select></label><label>Taille de ton parc de matériel<select name="parc">' + opts(PARCS) + '</select></label></div>' +
       '<div class="two"><label>Ton e-mail *<input name="email" type="email" required autocomplete="email" inputmode="email" maxlength="120"></label><label>Ton téléphone<input name="telephone" type="tel" autocomplete="tel" inputmode="tel" maxlength="30"></label></div>' +
       '<label>Ce que tu aimerais gérer avec l’appli<textarea name="message" maxlength="1500" placeholder="Devis, stock, planning, caisse d’évènement…"></textarea></label>' +
-      '<label class="chk"><input type="checkbox" name="consentement" value="oui" required><span>J’accepte d’être recontacté pour cette demande. Ces informations ne servent qu’à te répondre et ne sont pas transmises à des tiers.</span></label>' +
+      '<label class="chk"><input type="checkbox" name="consentement" value="oui" required><span>J’accepte d’être recontacté pour cette demande. Ces informations ne servent qu’à te répondre et ne sont pas transmises à des tiers. <a href="/confidentialite" target="_blank" rel="noopener">Politique de confidentialité</a></span></label>' +
       '<div class="msg" id="lp-msg" role="status" aria-live="polite"></div>' +
       '<button class="lp-btn gold" type="submit">Demander mon essai gratuit</button></form>';
   }
@@ -140,7 +141,7 @@
       '<h1>Ta location de matériel, <em>enfin sous contrôle</em>.</h1>' +
       '<p class="lead">Devis, factures, stock, clients, paiements et caisse d’évènement. Tout dans une seule appli, sur ton téléphone comme sur ton ordinateur. Pensée par un loueur, pour les loueurs.</p>' +
       '<div class="lp-cta"><button class="lp-btn gold" data-lp="form" type="button">Essayer gratuitement 7 jours</button><button class="lp-btn ghost" data-lp="login" type="button">J’ai déjà un compte</button></div>' +
-      '<p class="lp-note">Pas de logiciel à installer : ça s’ouvre dans le navigateur. 7 jours d’essai gratuit, puis 39,99 € par mois, annulable à tout moment.</p></div>' +
+      '<p class="lp-note">Pas de logiciel à installer : ça s’ouvre dans le navigateur. 7 jours d’essai gratuit, puis 39,99 € HT par mois, annulable à tout moment.</p></div>' +
       '<div class="lp-mock" role="img" aria-label="Exemple de devis dans l’application"><div class="top"><span class="tag">Devis</span><span>Exemple</span></div>' +
       '<h3>Mariage de Camille et Hugo</h3><div class="sub">Samedi · 120 invités</div>' +
       '<div style="margin-top:10px"><div class="row"><span>Tente de réception 5 × 6 m</span><span>220,00 €</span></div><div class="row"><span>Tables et bancs × 15</span><span>135,00 €</span></div><div class="row"><span>Livraison et reprise</span><span>45,00 €</span></div></div>' +
@@ -164,14 +165,14 @@
 
       '<section class="lp-sec alt"><div class="lp-wrap" style="text-align:center"><h2>Une appli qui s’adapte à toi, pas l’inverse</h2><p class="intro" style="margin-inline:auto">Chaque loueur travaille à sa façon. Tout est personnalisable selon tes besoins: l’identité visuelle, le catalogue, les tarifs, les documents et les fonctions utiles à ton activité.</p><p class="lp-fast">Toute demande est créée ou modifiée en quelques jours, parfois même dans l’heure.</p></div></section>' +
       '<section class="lp-sec" id="lp-tarif"><div class="lp-wrap" style="text-align:center"><h2>Un seul forfait, tout compris</h2><p class="intro" style="margin-inline:auto">Pas de formule compliquée ni d’options cachées : tu as accès à tout, dès le premier jour.</p>' +
-      '<div class="lp-price"><span class="badge">7 jours d’essai gratuit</span><div class="amt">39,99&nbsp;€ <small>par mois</small></div>' +
+      '<div class="lp-price"><span class="badge">7 jours d’essai gratuit</span><div class="amt">39,99&nbsp;€ <small>HT par mois</small></div>' +
       '<ul><li>Accès à la totalité du site internet et de ses fonctionnalités : devis, factures, stock, clients, planning, caisse</li><li>Accès au système de paiement</li><li>7 jours pour essayer l’appli gratuitement</li><li>Annulable à tout moment, sans engagement</li></ul>' +
-      '<button class="lp-btn gold" data-lp="form" type="button">Commencer l’essai gratuit</button><p class="fine">Tu peux arrêter quand tu veux, directement depuis ton compte ou en nous écrivant.</p></div></div></section>' +
+      '<button class="lp-btn gold" data-lp="form" type="button">Commencer l’essai gratuit</button><p class="fine">TVA en sus. Tu peux arrêter quand tu veux, en nous écrivant, sans frais. <a href="/conditions">Conditions générales</a></p></div></div></section>' +
 
       '<section class="lp-final" id="lp-final"><div class="lp-wrap"><h2>Prêt à gagner du temps sur chaque location ?</h2><p>Dis-nous qui tu es et comment tu travailles : on crée ton compte pour ton essai gratuit de 7 jours et on te montre l’appli en direct sur un cas réel.</p>' + formHtml() +
       '<p style="font-size:14px;margin-top:18px">Tu as déjà un compte ? <button class="lp-btn ghost" data-lp="login" type="button" style="min-height:38px;margin-left:6px">Se connecter</button></p>' +
       '<p style="font-size:14px;margin-top:12px">Ou écris-nous directement : <a href="mailto:' + CONTACT + '">' + CONTACT + '</a></p></div></section>' +
-      '</main><footer class="lp-foot"><div class="lp-wrap"><div>' + NOM + ' ' + SIGNATURE + '</div><div>Conçu en Normandie pour les loueurs de matériel évènementiel.</div></div></footer>';
+      '</main><footer class="lp-foot"><div class="lp-wrap"><div>' + NOM + ' ' + SIGNATURE + '</div><div>Conçu en Normandie pour les loueurs de matériel évènementiel.</div><div class="lp-legal"><a href="/mentions-legales">Mentions légales</a> · <a href="/conditions">Conditions générales</a> · <a href="/confidentialite">Confidentialité</a></div></div></footer>';
   }
 
   function show(onLogin) {

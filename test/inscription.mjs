@@ -16,7 +16,15 @@ try {
   await page.goto('http://127.0.0.1:' + port + '/'); await page.waitForSelector('#web-landing');
   // tarif affiché
   const tarif = (await page.textContent('#lp-tarif')).replace(/\s+/g, ' ');
-  assert.match(tarif, /39,99/); assert.match(tarif, /7 jours d’essai gratuit/); assert.match(tarif, /Annulable à tout moment/); assert.match(tarif, /système de paiement/);
+  assert.match(tarif, /39,99 € HT par mois/); assert.match(tarif, /TVA en sus/); assert.match(tarif, /7 jours d’essai gratuit/); assert.match(tarif, /Annulable à tout moment/); assert.match(tarif, /système de paiement/);
+  // pages légales : liens dans le pied de page et contenu clé
+  for (const [href, mots] of [['/mentions-legales', ['995 013 786', 'Avranches', 'Netlify', 'Directeur de la publication']], ['/conditions', ['39,99 € HT par mois', 'résiliable à tout moment', '7 jours', 'tribunal de commerce de Coutances']], ['/confidentialite', ['RGPD', 'CNIL', 'Netlify', 'Google Fonts']]]) {
+    assert.ok(await page.$('#web-landing .lp-legal a[href="' + href + '"]'), 'lien ' + href);
+    const r = await page.request.get('http://127.0.0.1:' + port + href); assert.equal(r.status(), 200);
+    const t = (await r.text()).replace(/\s+/g, ' ');
+    for (const m of mots) assert.ok(t.includes(m), href + ' contient « ' + m + ' »');
+    assert.ok(!/\[à compléter\]|undefined|\{E\[/.test(t), href + ' sans reste de modèle');
+  }
   // le bouton du haut mène au formulaire
   await page.click('.lp-hero [data-lp=form]'); await page.waitForTimeout(900);
   assert.ok(await page.isVisible('#lp-form input[name=nom]'));

@@ -35,7 +35,7 @@ const head = `<!doctype html>
 <meta name="theme-color" content="#023047">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Loc en poche">
-<meta name="description" content="Loc en poche : devis, factures, stock, clients et caisse d’évènement pour les loueurs de matériel. Sur téléphone et ordinateur. 7 jours d’essai gratuit, puis 39,99 € par mois, annulable à tout moment.">
+<meta name="description" content="Loc en poche : devis, factures, stock, clients et caisse d’évènement pour les loueurs de matériel. Sur téléphone et ordinateur. 7 jours d’essai gratuit, puis 39,99 € HT par mois, annulable à tout moment.">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon-192.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
