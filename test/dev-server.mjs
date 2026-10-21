@@ -17,7 +17,7 @@ export function startServer(port = 0, withBlobs = true, quotaMb) {
     if (req.url.startsWith('/api/')) {
       const chunks = []; for await (const c of req) chunks.push(c);
       const r = new Request(origin + req.url, { method: req.method, headers: req.headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : Buffer.concat(chunks) });
-      const out = await handle(r, db, { setupCode: 'TESTCODE', blobs, quotaMb });
+      const out = await handle(r, db, { setupCode: 'TESTCODE', bbbToken: 'TOKEN_DE_TEST_0123456789abcdef', blobs, quotaMb });
       const headers = {}; out.headers.forEach((v, k) => (headers[k] = v));
       res.writeHead(out.status, headers); res.end(Buffer.from(await out.arrayBuffer())); return;
     }

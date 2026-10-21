@@ -161,6 +161,32 @@ export async function handle(req, db, opts = {}) {
   const method = req.method.toUpperCase();
   const ip = req.headers.get('x-nf-client-connection-ip') || req.headers.get('x-forwarded-for') || 'local';
   try {
+    // ---- Lecture seule pour BBB : liste des factures, protégée par une clé secrète (variable BBB_TOKEN).
+    if (path === 'bbb/factures') {
+      const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization', 'access-control-allow-methods': 'GET, OPTIONS', 'access-control-max-age': '600' };
+      if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+      if (method !== 'GET') return J({ error: 'methode' }, 405, cors);
+      if (!opts.bbbToken || String(opts.bbbToken).length < 24) return J({ error: 'introuvable' }, 404, cors); // désactivé tant que la clé n'est pas définie
+      if (tooMany(ip)) return J({ error: 'trop-de-tentatives' }, 429, cors);
+      const given = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+      const h = (x) => crypto.createHash('sha256').update(String(x)).digest();
+      if (!crypto.timingSafeEqual(h(given), h(opts.bbbToken))) { fails.get(ip).push(Date.now()); await wait(300); return J({ error: 'non-autorise' }, 401, cors); }
+      const rows = await db.sql`SELECT id, data FROM docs WHERE tenant = ${'main'} AND col = 'documents' AND deleted = false AND data->>'type' = 'facture' ORDER BY id`;
+      const today = todayParis();
+      const factures = rows.map((r) => {
+        const d = r.data || {}, t = d.totaux || {};
+        const ac = Math.round((d.acomptes || []).reduce((s, a) => s + (Number(a.montant) || 0), 0) * 100) / 100;
+        const ttc = Number(t.ttc) || 0;
+        return {
+          id: r.id, numero: d.numero || '', titre: d.titre || '', client: (d.clientSnap && d.clientSnap.nom) || '',
+          statut: d.statut || '', dateEmission: d.dateEmission || '', dateEcheance: d.dateEcheance || '', datePaiement: d.datePaiement || '',
+          ht: Number(t.ht) || 0, ttc, acomptes: ac, reste: d.statut === 'emise' ? Math.max(0, Math.round((ttc - ac) * 100) / 100) : 0,
+          enRetard: d.statut === 'emise' && !!d.dateEcheance && d.dateEcheance < today,
+        };
+      });
+      return J({ factures, genereLe: new Date().toISOString() }, 200, cors);
+    }
+
     if (method !== 'GET') {
       if (req.headers.get('x-requested-with') !== 'regie') return J({ error: 'forbidden' }, 403);
       const o = req.headers.get('origin');
