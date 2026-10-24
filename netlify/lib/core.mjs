@@ -82,7 +82,7 @@ async function currentUser(db, req) {
   const u = rows[0];
   return u && u.active ? u : null;
 }
-const pub = (u) => ({ id: u.id, email: u.email, name: u.name, role: u.role });
+const pub = (u) => ({ id: u.id, email: u.email, name: u.name, role: u.role, neutre: u.tenant !== undefined && u.tenant !== 'main' });
 const validEmail = (e) => /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(e);
 
 async function body(req) {

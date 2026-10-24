@@ -269,6 +269,8 @@ var DEFAULT_SET={
   penalites:"En cas de retard de paiement, des pénalités de retard sont exigibles dès le lendemain de la date d'échéance, au taux de trois fois le taux d'intérêt légal, ainsi qu'une indemnité forfaitaire de recouvrement de 40 € pour les clients professionnels.",
   conditions:'', cgv:'', mediateur:'', modCaution:'oui', modEdl:'oui', rib:''
 };
+/* Espace d'un autre loueur (hors « main ») : pas de nom ni de logo Grand Ouest Locations par défaut */
+function isNeutre(){return !!(window.WEB&&window.WEB.user&&window.WEB.user.neutre);}
 var ST_DOSSIER={option:['Devis','sun'],confirmee:['Confirmée','info'],livree:['Livrée','ok'],terminee:['Terminée',''],annulee:['Annulée','bad']};
 var ACTIFS=['option','confirmee','livree'];
 var ST_DEVIS={brouillon:['Brouillon',''],envoye:['Envoyé','info'],accepte:['Accepté','ok'],refuse:['Refusé','bad']};
@@ -424,8 +426,9 @@ function lumi(a){return (0.299*a[0]+0.587*a[1]+0.114*a[2])/255;}
 function PC(){return hex2rgb(S.set.couleurPrincipale)||[2,48,71];}
 function PA(){return hex2rgb(S.set.couleurAccent)||[208,187,99];}
 function PG(){return mixRgb(PA(),[255,255,255],0.5);}
-function curLogo(){return S.set.logo||LOGO;}
-function curLogoR(){return S.set.logo?(num(S.set.logoR)||3):LOGO_R;}
+function curLogo(){return S.set.logo||(isNeutre()?'/icon-192.png':LOGO);}
+function curLogoR(){return S.set.logo?(num(S.set.logoR)||3):(isNeutre()?0:LOGO_R);}
+function pdfLogo(){return S.set.logo||(isNeutre()?'':LOGO);}
 function applyTheme(){
   var st=document.getElementById('theme-custom');
   if(!st){st=document.createElement('style');st.id='theme-custom';document.body.appendChild(st);}
@@ -480,7 +483,7 @@ function initDb(){
     S.db=db;
     ['materiel','clients','dossiers','documents','taches','entretiens','caisses','tournees','vehicules','ikjours'].forEach(sub);
     db.doc('config/societe').onSnapshot(function(snap){
-      S.set=Object.assign({},DEFAULT_SET,snap.exists?snap.data():{});applyTheme();S.loaded.config=true;checkReady();schedule();
+      S.set=Object.assign({},DEFAULT_SET,isNeutre()?{nom:''}:{},snap.exists?snap.data():{});applyTheme();S.loaded.config=true;checkReady();schedule();
     },function(e){S.error='Lecture impossible ('+(e&&e.code||'erreur')+').';schedule();});
   });
   c.use('downloads').then(function(d){S.dl=d;});
@@ -565,6 +568,7 @@ function vDashboard(){
   if(tRet||tSug)alerts.push(['Tâches et rappels',(tRet?tRet+' tâche(s) en retard. ':'')+(tSug?tSug+' rappel(s) automatique(s) à traiter.':''),'taches']);
   var eOuv=S.entretiens.filter(function(x){return x.statut==='ouvert';}).length;
   if(eOuv)alerts.push(['Matériel en entretien',eOuv+' intervention(s) en cours : le matériel concerné est déduit des disponibilités.','entretien']);
+  if(isNeutre()&&!S.set.nom)alerts.push(['Nom de la société à renseigner','Indiquez le nom de votre société dans les réglages : il apparaît sur vos devis et vos factures.','reglages']);
   if(!S.set.siret)alerts.push(['Informations légales incomplètes','Ajoutez le SIRET, l\'adresse et le régime de TVA pour vos devis et factures.','reglages']);
   if(!alerts.length)h+=empty('Tout est en ordre','Aucune alerte pour le moment.');
   alerts.forEach(function(a){h+='<div class="list-row"><div style="flex:1 1 240px"><b>'+esc(a[0])+'</b><div class="small muted">'+esc(a[1])+'</div></div><button class="btn btn-sm" '+(a[3]||'data-action="nav" data-v="'+a[2]+'"')+'>Voir</button></div>';});
@@ -815,7 +819,7 @@ function edlSave(extra,after){
 function buildEdlPdf(d){
   var J=window.jspdf&&window.jspdf.jsPDF;if(!J)return null;
   var pdf=new J({unit:'mm',format:'a4'}),W=210,M=15,y=18,e=d.edl||{},c=d.caution||{},cl=byId(S.clients,d.clientId)||{nom:''};
-  var lh=16,lw=lh*curLogoR();try{pdf.addImage(curLogo(),'PNG',M,y-9,lw,lh);}catch(x){}
+  var lh=16,lw=lh*curLogoR();try{if(pdfLogo())pdf.addImage(curLogo(),'PNG',M,y-9,lw,lh);}catch(x){}
   y+=lh-4;pdf.setFont('helvetica','bold');pdf.setFontSize(18);pdf.text(useEdl()?'ÉTAT DES LIEUX':'CAUTION',M,y);pdf.setFontSize(10);pdf.text(String(S.set.nom||''),W-M,y,{align:'right'});
   pdf.setFont('helvetica','normal');y+=9;
   ['Événement : '+(d.titre||''),'Client : '+(cl.nom||'')+(cl.tel?'  ·  '+cl.tel:''),'Lieu : '+(d.lieu||'—'),'Du '+fmtD(d.dateDebut)+' au '+fmtD(d.dateFin)].forEach(function(t){pdf.text(t,M,y);y+=5;});
@@ -1047,7 +1051,7 @@ function renderTourModal(){
 function buildTourPdf(t){
   var J=window.jspdf&&window.jspdf.jsPDF;if(!J)return null;
   var pdf=new J({unit:'mm',format:'a4'}),W=210,M=15,y=18,st=tourStopsOf(t);
-  var lh=16,lw=lh*curLogoR();try{pdf.addImage(curLogo(),'PNG',M,y-9,lw,lh);}catch(x){}
+  var lh=16,lw=lh*curLogoR();try{if(pdfLogo())pdf.addImage(curLogo(),'PNG',M,y-9,lw,lh);}catch(x){}
   y+=lh-4;pdf.setFont('helvetica','bold');pdf.setFontSize(18);pdf.text('FEUILLE DE TOURNÉE',M,y);pdf.setFontSize(10);pdf.text(String(S.set.nom||''),W-M,y,{align:'right'});
   pdf.setFont('helvetica','normal');y+=8;pdf.text((t.nom||'Tournée')+' – '+fmtD(t.date),M,y);y+=5;
   if(S.set.adresse){pdf.text('Départ'+(t.retour!==false?' et retour':'')+' : '+String(S.set.adresse).replace(/\s*\n\s*/g,', '),M,y);y+=5;}
@@ -1794,7 +1798,7 @@ function cxCsv(c){
 function cxPdf(c){
   var J=window.jspdf&&window.jspdf.jsPDF;if(!J||typeof J.API.autoTable!=='function')return null;
   var t=cxTot(c),rl=cxReel(c),pdf=new J({unit:'mm',format:'a4'}),W=210,M=16,y=18,P=function(n){return pm(n);};
-  var lw=22*curLogoR();try{pdf.addImage(curLogo(),'PNG',M,y-9,lw,22);}catch(e){}
+  var lw=22*curLogoR();try{if(pdfLogo())pdf.addImage(curLogo(),'PNG',M,y-9,lw,22);}catch(e){}
   pdf.setFont('helvetica','bold');pdf.setFontSize(16);pdf.setTextColor.apply(pdf,PC());pdf.text('Récapitulatif de caisse',W-M,y,{align:'right'});
   pdf.setFont('helvetica','normal');pdf.setFontSize(10);pdf.setTextColor(60);pdf.text(S.set.nom||'',W-M,y+6,{align:'right'});
   y=y+22;pdf.setFont('helvetica','bold');pdf.setFontSize(13);pdf.setTextColor.apply(pdf,PC());pdf.text(String(c.nom||'Évènement'),M,y);
@@ -2194,7 +2198,7 @@ document.addEventListener('pointerup',sigEnd);document.addEventListener('pointer
 function buildPdf(d){
   var J=window.jspdf&&window.jspdf.jsPDF;if(!J||typeof J.API.autoTable!=='function')return null;
   var pdf=new J({unit:'mm',format:'a4'}),W=210,M=15,y=18,soc=d.societeSnap||S.set,cl=d.clientSnap||{},isD=d.type==='devis';
-  var lh=22,lw=lh*curLogoR();try{pdf.addImage(curLogo(),'PNG',M,y-9,lw,lh);}catch(e){}var lx=M+lw+4;
+  var lh=22,lw=lh*curLogoR();try{if(pdfLogo())pdf.addImage(curLogo(),'PNG',M,y-9,lw,lh);}catch(e){}var lx=M+lw+4;
   pdf.setFont('helvetica','bold');pdf.setFontSize(15);pdf.text(String(soc.nom||''),lx,y);
   pdf.setFont('helvetica','normal');pdf.setFontSize(9);
   var info=[];(String(soc.adresse||'').split('\n')).forEach(function(x){if(x.trim())info.push(x.trim());});
@@ -2253,7 +2257,7 @@ function cautionTotale(d){
 function buildContratPdf(d){
   var J=window.jspdf&&window.jspdf.jsPDF;if(!J||typeof J.API.autoTable!=='function')return null;
   var pdf=new J({unit:'mm',format:'a4'}),W=210,M=15,y=18,soc=d.societeSnap||S.set,cl=d.clientSnap||{};
-  var lh=18,lw=lh*curLogoR();try{pdf.addImage(curLogo(),'PNG',M,y-9,lw,lh);}catch(e){}y+=lh-4;
+  var lh=18,lw=lh*curLogoR();try{if(pdfLogo())pdf.addImage(curLogo(),'PNG',M,y-9,lw,lh);}catch(e){}y+=lh-4;
   pdf.setFont('helvetica','bold');pdf.setFontSize(18);pdf.text('CONTRAT DE LOCATION',M,y);
   pdf.setFontSize(10);pdf.text('Réf. '+(d.numero||''),W-M,y,{align:'right'});
   pdf.setFont('helvetica','normal');pdf.setFontSize(10);y+=10;
