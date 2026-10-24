@@ -100,7 +100,7 @@ a{color:var(--accent)}
 .pick-n b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pick-m{display:grid;text-align:right;gap:1px}
 .pick-plus{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--gold);color:var(--gold-ink);font-weight:800;font-size:18px;flex:0 0 auto}
-.foot-total{margin-right:auto;display:flex;align-items:baseline;gap:8px;font-family:var(--font-display);font-size:18px}
+.no-prix .px{display:none!important}.no-prix .line{grid-template-columns:minmax(0,1fr) 64px 32px}.foot-total{margin-right:auto;display:flex;align-items:baseline;gap:8px;font-family:var(--font-display);font-size:18px}
 .modal-f{position:sticky;bottom:0;z-index:3;align-items:center}
 .grp-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--accent-soft);border-bottom:1px solid var(--line)}
 .grp-h td{background:var(--surface-2);color:var(--accent)}
@@ -271,6 +271,11 @@ var DEFAULT_SET={
 };
 /* Espace d'un autre loueur (hors « main ») : pas de nom ni de logo Grand Ouest Locations par défaut */
 function isNeutre(){return !!(window.WEB&&window.WEB.user&&window.WEB.user.neutre);}
+/* Droits du compte connecté (les administrateurs ont tout) */
+function denied(k){var u=window.WEB&&window.WEB.user;return !!(u&&u.role!=='admin'&&u.deny&&u.deny.indexOf(k)>=0);}
+function canPrix(){return !denied('prix');}
+var VIEW_KEY={documents:['documents','prix'],caisse:['caisse','prix'],stats:['stats','prix'],clients:['clients'],materiel:['materiel'],entretien:['entretien'],ik:['ik'],reglages:['reglages'],mails:['mails']};
+function canView(v){var k=VIEW_KEY[v]||[];for(var i=0;i<k.length;i++)if(denied(k[i]))return false;return true;}
 var ST_DOSSIER={option:['Devis','sun'],confirmee:['Confirmée','info'],livree:['Livrée','ok'],terminee:['Terminée',''],annulee:['Annulée','bad']};
 var ACTIFS=['option','confirmee','livree'];
 var ST_DEVIS={brouillon:['Brouillon',''],envoye:['Envoyé','info'],accepte:['Accepté','ok'],refuse:['Refusé','bad']};
@@ -298,7 +303,7 @@ function fmtD(s){if(!s)return '';var p=s.split('-');return p[2]+'/'+p[1]+'/'+p[0
 function firstOfMonth(d){return new Date(d.getFullYear(),d.getMonth(),1);}
 function eachDay(a,b){var out=[],d=a;var guard=0;while(d<=b&&guard++<400){out.push(d);d=addDays(d,1);}return out;}
 var EUR=new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'});
-function money(n){return EUR.format(n||0);}
+function money(n){return canPrix()?EUR.format(n||0):'•••';}
 function r2(n){return Math.round((n+Number.EPSILON)*100)/100;}
 function num(v){var n=parseFloat(String(v).replace(',','.'));return isFinite(n)?n:0;}
 function uid(col){return S.db.collection(col).doc().id;}
@@ -506,7 +511,9 @@ function quiOk(x){return !S.f.qui||x.assigne===S.f.qui||x.assigne==='Les deux';}
 function render(){
   var ae=document.activeElement,fid=ae&&ae.id,ss=ae&&ae.selectionStart;
   var on=document.querySelector('.nav'),osd=document.querySelector('.side'),nsl=on?on.scrollLeft:0,nst=on?on.scrollTop:0,ssd=osd?osd.scrollTop:0;
-  var nav=VIEWS.filter(function(v){return v[3]!=='sub';}).map(function(v){var on=S.view===v[0]||(v[0]==='planning'&&S.view==='tournee');return '<button data-action="nav" data-v="'+v[0]+'"'+(on?' aria-current="page"':'')+'>'+ic(v[2])+'<span>'+v[1]+'</span></button>';}).join('');
+  if(!canView(S.view))S.view='dashboard';
+  document.body.classList.toggle('no-prix',!canPrix());
+  var nav=VIEWS.filter(function(v){return v[3]!=='sub'&&canView(v[0]);}).map(function(v){var on=S.view===v[0]||(v[0]==='planning'&&S.view==='tournee');return '<button data-action="nav" data-v="'+v[0]+'"'+(on?' aria-current="page"':'')+'>'+ic(v[2])+'<span>'+v[1]+'</span></button>';}).join('');
   var body;
   if(S.error)body='<div class="banner">'+esc(S.error)+'</div>';
   else if(!S.ready)body='<div class="empty"><h3>Chargement…</h3><p>Lecture de vos données.</p></div>';
@@ -548,9 +555,9 @@ function vDashboard(){
   var aComp=S.materiel.filter(function(m){return m.stockAVerifier;}).length;
   var h=head('Tableau de bord',fmtD(t)+' · '+S.dossiers.filter(function(d){return ACTIFS.indexOf(d.statut)>=0;}).length+' location(s) en cours ou à venir','<button class="btn btn-primary" data-action="new-dossier">'+ic('plus')+'Nouvelle location</button>');
   h+='<div class="grid g4">'
-   +'<div class="card kpi kpi-link" role="button" tabindex="0" data-action="kpi-doc" data-t="facture" data-st="emise"><div class="kpi-l">À encaisser</div><div class="kpi-v">'+money(aEnc)+'</div><div class="kpi-s">'+nbEnc+' facture(s)'+(retard?' · <b style="color:var(--bad)">'+retard+' en retard</b>':'')+'</div></div>'
-   +'<div class="card kpi kpi-link" role="button" tabindex="0" data-action="kpi-doc" data-t="facture" data-st=""><div class="kpi-l">Facturé ce mois (HT)</div><div class="kpi-v">'+money(caMois)+'</div><div class="kpi-s">Hors factures annulées</div></div>'
-   +'<div class="card kpi kpi-link" role="button" tabindex="0" data-action="kpi-doc" data-t="devis" data-st="attente"><div class="kpi-l">Devis en attente</div><div class="kpi-v">'+devis.length+'</div><div class="kpi-s">'+money(devisMt)+' TTC</div></div>'
+   +'<div class="card kpi kpi-link px" role="button" tabindex="0" data-action="kpi-doc" data-t="facture" data-st="emise"><div class="kpi-l">À encaisser</div><div class="kpi-v">'+money(aEnc)+'</div><div class="kpi-s">'+nbEnc+' facture(s)'+(retard?' · <b style="color:var(--bad)">'+retard+' en retard</b>':'')+'</div></div>'
+   +'<div class="card kpi kpi-link px" role="button" tabindex="0" data-action="kpi-doc" data-t="facture" data-st=""><div class="kpi-l">Facturé ce mois (HT)</div><div class="kpi-v">'+money(caMois)+'</div><div class="kpi-s">Hors factures annulées</div></div>'
+   +'<div class="card kpi kpi-link px" role="button" tabindex="0" data-action="kpi-doc" data-t="devis" data-st="attente"><div class="kpi-l">Devis en attente</div><div class="kpi-v">'+devis.length+'</div><div class="kpi-s">'+money(devisMt)+' TTC</div></div>'
    +'<div class="card kpi kpi-link" role="button" tabindex="0" data-action="kpi-dehors"><div class="kpi-l">Matériel dehors aujourd\'hui</div><div class="kpi-v">'+dehors.length+'</div><div class="kpi-s">location(s) en cours</div></div></div>';
   h+='<div class="grid g2" style="margin-top:14px"><div class="card"><div class="sec-title">À livrer et à récupérer (7 jours)</div>';
   if(!ev.length)h+=empty('Rien de prévu','Aucune livraison ni récupération cette semaine.');
@@ -624,7 +631,7 @@ function dossierRow(d){
   var t=dossierTotals(d),docs=docsOf(d.id);
   return '<div class="list-row row-click" style="cursor:pointer" data-action="open-dossier" data-id="'+d.id+'"><div style="flex:1 1 240px;min-width:0"><b>'+esc(d.titre||'Sans titre')+'</b><div class="small muted">'+esc(clientName(d.clientId))+(d.lieu?' · '+esc(d.lieu):'')+'</div></div>'
    +'<div class="small" style="min-width:150px">'+fmtD(d.dateDebut)+(d.dateFin&&d.dateFin!==d.dateDebut?' → '+fmtD(d.dateFin):'')+'</div>'
-   +'<div>'+chip(ST_DOSSIER,d.statut)+togBtns(d)+quiChip(d)+(useCaution()&&d.caution&&d.caution.statut==='versee'?' <span class="chip info">Caution reçue</span>':'')+(docs.length?' <span class="chip">'+docs.length+' doc.</span>':'')+'</div><div class="num"><b>'+money(t.ttc)+'</b><div class="small muted">TTC</div></div></div>';
+   +'<div>'+chip(ST_DOSSIER,d.statut)+togBtns(d)+quiChip(d)+(useCaution()&&d.caution&&d.caution.statut==='versee'?' <span class="chip info">Caution reçue</span>':'')+(docs.length?' <span class="chip">'+docs.length+' doc.</span>':'')+'</div><div class="num px"><b>'+money(t.ttc)+'</b><div class="small muted">TTC</div></div></div>';
 }
 function vDossiers(){
   var h=head('Locations','Chaque location regroupe le client, les dates, le matériel et les documents.','<button class="btn btn-primary" data-action="new-dossier">'+ic('plus')+'Nouvelle location</button>');
@@ -784,10 +791,10 @@ function openEdl(id){
   var st=c.statut||'';
   var h=mhead(edlLabel())+'<div class="modal-b"><div class="small muted" style="margin-bottom:8px"><b>'+esc(d.titre||'Sans titre')+'</b> · '+esc(clientName(d.clientId))+' · du '+fmtD(d.dateDebut)+' au '+fmtD(d.dateFin)+'</div>';
   if(uc)h+='<section class="dsec"><h3>Caution '+(st==='versee'?'<span class="chip info">Reçue</span>':st==='rendue'?'<span class="chip ok">Restituée</span>':'<span class="chip sun">Non reçue</span>')+'</h3><div class="form-grid">'
-   +'<div class="field"><label for="c-mont">Montant de la caution (€)</label><input id="c-mont" type="number" min="0" step="1" value="'+esc(cautionDe(d))+'"><div class="small muted">Calculée d\'après le matériel loué ('+money(cautionTotale(d))+').</div></div>'
+   +'<div class="field px"><label for="c-mont">Montant de la caution (€)</label><input id="c-mont" type="number" min="0" step="1" value="'+esc(cautionDe(d))+'"><div class="small muted">Calculée d\'après le matériel loué ('+money(cautionTotale(d))+').</div></div>'
    +'<div class="field"><label for="c-mode">Mode de dépôt</label><select id="c-mode">'+['Espèces','Chèque (non encaissé)','Carte bancaire (empreinte)','Virement'].map(function(m){return '<option'+(c.mode===m?' selected':'')+'>'+m+'</option>';}).join('')+'</select></div>'
    +'<div class="field"><label for="c-date">Reçue le</label><input id="c-date" type="date" value="'+esc(c.dateRecu||'')+'"></div>'
-   +'<div class="field"><label for="c-ret">Retenue (casse, nettoyage) €</label><input id="c-ret" type="number" min="0" step="0.01" value="'+esc(num(c.retenue))+'"></div></div>'
+   +'<div class="field px"><label for="c-ret">Retenue (casse, nettoyage) €</label><input id="c-ret" type="number" min="0" step="0.01" value="'+esc(num(c.retenue))+'"></div></div>'
    +'<div class="small" id="c-res" style="margin:6px 0"></div>'
    +'<div class="toolbar" style="margin:0"><button class="btn btn-sm'+(st?'':' btn-primary')+'" data-action="edl-caution" data-st="versee">Caution reçue</button>'+(ue?'<button class="btn btn-sm" data-action="edl-retenir">Retenir les casses</button>':'')+'<button class="btn btn-sm'+(st==='versee'?' btn-primary':'')+'" data-action="edl-caution" data-st="rendue">Restituer la caution</button>'+(st?'<button class="btn btn-sm" data-action="edl-caution" data-st="">Annuler le statut</button>':'')+'</div>'
    +(st==='rendue'&&c.dateRendu?'<div class="small muted" style="margin-top:6px">Restituée le '+fmtD(c.dateRendu)+(num(c.retenue)>0?' avec une retenue de '+money(num(c.retenue)):'')+'.</div>':'')+'</section>';
@@ -1658,6 +1665,7 @@ function materielList(){
   return '<table><thead><tr><th>Article</th><th class="num">Prix</th><th class="num">Stock</th><th class="num">Hors service</th><th class="num">Dehors auj.</th><th class="num">Dispo auj.</th></tr></thead><tbody>'+rows+'</tbody></table>'+moreBtn('materiel',nL-lim('materiel'));
 }
 function priceLabel(m){
+  if(!canPrix())return '';
   if(m.prixMode==='devis'||m.prix==null)return '<span class="muted">Sur devis</span>';
   return (m.prixMode==='des'?'dès ':'')+money(m.prix)+(m.unite&&m.unite!=='location'?' <span class="muted small">/'+esc(m.unite)+'</span>':'');
 }
@@ -1872,12 +1880,12 @@ function openMateriel(id){
   S.modal='materiel';S.draft=Object.assign({},m);S.certDraft=null;
   var cats=uniq(S.materiel.map(function(x){return x.categorie;})).sort();
   openModal(mhead(id?'Modifier l\'article':'Nouvel article')+'<div class="modal-b"><div class="form-grid"><div class="field"><label for="m-nom">Nom</label><input id="m-nom" value="'+esc(m.nom)+'"></div><div class="field"><label for="m-cat">Catégorie</label><input id="m-cat" list="m-cats" value="'+esc(m.categorie)+'"><datalist id="m-cats">'+cats.map(function(c){return '<option value="'+esc(c)+'">';}).join('')+'</datalist></div>'
-   +'<div class="field"><label for="m-prix">Prix de location ('+esc(S.set.prixCatalogue)+')</label><input id="m-prix" type="number" step="0.01" min="0" value="'+(m.prix==null?'':esc(m.prix))+'"></div>'
-   +'<div class="field"><label for="m-mode">Type de prix</label><select id="m-mode"><option value="fixe"'+(m.prixMode==='fixe'?' selected':'')+'>Prix fixe</option><option value="des"'+(m.prixMode==='des'?' selected':'')+'>À partir de</option><option value="devis"'+(m.prixMode==='devis'?' selected':'')+'>Sur devis</option></select></div>'
+   +'<div class="field px"><label for="m-prix">Prix de location ('+esc(S.set.prixCatalogue)+')</label><input id="m-prix" type="number" step="0.01" min="0" value="'+(m.prix==null?'':esc(m.prix))+'"></div>'
+   +'<div class="field px"><label for="m-mode">Type de prix</label><select id="m-mode"><option value="fixe"'+(m.prixMode==='fixe'?' selected':'')+'>Prix fixe</option><option value="des"'+(m.prixMode==='des'?' selected':'')+'>À partir de</option><option value="devis"'+(m.prixMode==='devis'?' selected':'')+'>Sur devis</option></select></div>'
    +'<div class="field"><label for="m-unite">Facturé par</label><input id="m-unite" value="'+esc(m.unite||'location')+'" placeholder="location, week-end, pièce…"></div>'
    +'<div class="field"><label for="m-stock">Quantité en stock</label><input id="m-stock" type="number" min="0" step="1" value="'+num(m.stock)+'"></div>'
    +'<div class="field"><label for="m-hs">Hors service</label><input id="m-hs" type="number" min="0" step="1" value="'+num(m.horsService)+'"></div>'
-   +'<div class="field"><label for="m-caution">Caution (€)</label><input id="m-caution" type="number" min="0" step="1" value="'+(m.caution==null?'':esc(m.caution))+'"></div><div class="field"><label for="m-achat">Coût d\'achat total (€, toutes pièces)</label><input id="m-achat" type="number" min="0" step="0.01" value="'+(m.coutAchat==null?'':esc(m.coutAchat))+'" placeholder="Pour calculer l\'amortissement"></div></div><div class="field"><label for="m-notes">Notes (dimensions, capacité, montage…)</label><textarea id="m-notes">'+esc(m.notes)+'</textarea></div><div class="field" id="m-cert-wrap"'+(certVisible(m.categorie)?'':' hidden')+'><label id="m-cert-lbl">'+(certKind(m.categorie)||certKindM(m)).lbl+' (PDF)</label><div id="m-cert">'+certBlock(m)+'</div></div></div>'
+   +'<div class="field px"><label for="m-caution">Caution (€)</label><input id="m-caution" type="number" min="0" step="1" value="'+(m.caution==null?'':esc(m.caution))+'"></div><div class="field px"><label for="m-achat">Coût d\'achat total (€, toutes pièces)</label><input id="m-achat" type="number" min="0" step="0.01" value="'+(m.coutAchat==null?'':esc(m.coutAchat))+'" placeholder="Pour calculer l\'amortissement"></div></div><div class="field"><label for="m-notes">Notes (dimensions, capacité, montage…)</label><textarea id="m-notes">'+esc(m.notes)+'</textarea></div><div class="field" id="m-cert-wrap"'+(certVisible(m.categorie)?'':' hidden')+'><label id="m-cert-lbl">'+(certKind(m.categorie)||certKindM(m)).lbl+' (PDF)</label><div id="m-cert">'+certBlock(m)+'</div></div></div>'
    +'<div class="modal-f">'+(id?'<button class="btn btn-danger" data-action="del-materiel" style="margin-right:auto">'+(S.confirm==='materiel'?'Confirmer la suppression':'Supprimer')+'</button>':'')+'<button class="btn" data-action="close">Annuler</button><button class="btn btn-primary" data-action="save-materiel">Enregistrer</button></div>');
 }
 function saveMateriel(){
@@ -1913,9 +1921,9 @@ function lineHtml(l,i){
   return '<div class="line" data-i="'+i+'">'
    +'<div class="field f4"><span class="lbl">Désignation</span><input data-line="'+i+'" data-lf="designation" value="'+esc(l.designation)+'" placeholder="Désignation" aria-label="Désignation"><div class="avail" id="av-'+i+'"></div></div>'
    +'<div class="field"><span class="lbl">'+(q?'Km':'Qté')+'</span><input type="number" min="0" step="1" data-line="'+i+'" data-lf="qte" value="'+esc(l.qte)+'" aria-label="'+(q?'Kilomètres':'Quantité')+'"></div>'
-   +'<div class="field"><span class="lbl">PU HT</span><input type="number" step="0.01" data-line="'+i+'" data-lf="puHT" id="pu-'+i+'" value="'+esc(r2(num(l.puHT)))+'" aria-label="Prix unitaire HT"></div>'
-   +'<div class="field"><span class="lbl">PU TTC</span><input type="number" step="0.01" data-line="'+i+'" data-lf="puTTC" id="ttc-'+i+'" value="'+esc(r2(num(l.puHT)*(1+num(l.tva)/100)))+'" aria-label="Prix unitaire TTC"></div>'
-   +'<div class="line-t" id="lh-'+i+'"></div><div class="line-t" id="lt-'+i+'"></div>'
+   +'<div class="field px"><span class="lbl">PU HT</span><input type="number" step="0.01" data-line="'+i+'" data-lf="puHT" id="pu-'+i+'" value="'+esc(r2(num(l.puHT)))+'" aria-label="Prix unitaire HT"></div>'
+   +'<div class="field px"><span class="lbl">PU TTC</span><input type="number" step="0.01" data-line="'+i+'" data-lf="puTTC" id="ttc-'+i+'" value="'+esc(r2(num(l.puHT)*(1+num(l.tva)/100)))+'" aria-label="Prix unitaire TTC"></div>'
+   +'<div class="line-t px" id="lh-'+i+'"></div><div class="line-t px" id="lt-'+i+'"></div>'
    +'<button class="icon-btn del-l" data-action="del-line" data-i="'+i+'" aria-label="Supprimer la ligne">'+ic('trash')+'</button></div>';
 }
 var PICK={q:'',cat:''};
@@ -1961,7 +1969,7 @@ function pickResults(){
   if(!l.length)return '<div class="small muted" style="padding:6px 2px">Aucun article trouvé. Utilisez « Ajouter une ligne » pour une ligne libre.</div>';
   return l.slice(0,30).map(function(m){
     var used=reservedMax(m.id,d.dateDebut,d.dateFin,d.id),libre=dispoInfo(m)-used,inL=d.lignes.filter(function(x){return x.materielId===m.id;}).reduce(function(a,x){return a+num(x.qte);},0);
-    var pr=m.prixMode==='devis'?'Sur devis':(m.prixMode==='des'?'dès ':'')+money(num(m.prix))+(S.set.prixCatalogue==='TTC'?' TTC':' HT');
+    var pr=!canPrix()?'':m.prixMode==='devis'?'Sur devis':(m.prixMode==='des'?'dès ':'')+money(num(m.prix))+(S.set.prixCatalogue==='TTC'?' TTC':' HT');
     return '<button class="pick-row" data-action="pick-mat" data-id="'+m.id+'"><span class="pick-n"><b>'+esc(m.nom)+'</b><span class="small muted">'+esc(m.categorie||'')+'</span></span><span class="pick-m"><span class="small">'+pr+'</span><span class="avail '+(libre<=0?'bad':'ok')+'">'+(libre<=0?'Indisponible':'Dispo : '+libre)+'</span></span>'+(inL?'<span class="chip info">× '+inL+'</span>':'')+'<span class="pick-plus">+</span></button>';
   }).join('')+(l.length>30?'<div class="small muted" style="padding:6px 2px">'+(l.length-30)+' autres : affinez la recherche.</div>':'');
 }
@@ -1978,7 +1986,7 @@ function matSuggest(){
   var d=S.draft;
   box.innerHTML=l.slice(0,12).map(function(m){
     var libre=dispoInfo(m)-reservedMax(m.id,d.dateDebut,d.dateFin,d.id);
-    var pr=m.prixMode==='devis'?'Sur devis':(m.prixMode==='des'?'dès ':'')+money(num(m.prix))+(S.set.prixCatalogue==='TTC'?' TTC':' HT');
+    var pr=!canPrix()?'':m.prixMode==='devis'?'Sur devis':(m.prixMode==='des'?'dès ':'')+money(num(m.prix))+(S.set.prixCatalogue==='TTC'?' TTC':' HT');
     return '<button class="pick-row" data-action="pick-mat" data-id="'+m.id+'"><span class="pick-n"><b>'+esc(m.nom)+'</b><span class="small muted">'+esc(m.categorie||'')+'</span></span><span class="pick-m"><span class="small">'+pr+'</span><span class="avail '+(libre<=0?'bad':'ok')+'">'+(libre<=0?'Indisponible':'Dispo : '+libre)+'</span></span><span class="pick-plus">+</span></button>';
   }).join('')+(l.length>12?'<div class="small muted" style="padding:6px 2px">'+(l.length-12)+' autres : affinez la recherche.</div>':'');
 }
@@ -2017,18 +2025,18 @@ function renderDossierModal(){
   h+='<section class="dsec"><h3><span class="dn">3</span>Matériel et prestations</h3>'
    +'<div class="opts"><button class="btn btn-sm opt-add" data-action="add-line">'+ic('plus')+'Ajouter une ligne libre</button>'
    +'<div class="opt"><span class="opt-t">Matériel</span><input id="d-matsel" data-matq="1" autocomplete="off" enterkeyhint="search" placeholder="Tapez pour chercher un article…" aria-label="Chercher un article du catalogue" style="flex:1;min-width:160px"><button class="btn btn-sm" data-action="add-matsel">Ajouter</button><div class="pick-res" id="mat-res" style="flex-basis:100%;max-height:42vh;overflow:auto"></div></div>'
-   +'<div class="opt"><span class="opt-t">'+ic('truck')+'Livraison</span><input type="number" min="0" step="1" id="d-km" data-km="1" value="'+esc(d.km||'')+'" placeholder="km" aria-label="Nombre de kilomètres"><span class="small muted">km × '+esc(String(num(S.set.tarifKm)).replace('.',','))+' €</span><button class="btn btn-sm" data-action="add-delivery">Ajouter</button></div>'
-   +'<div class="opt"><span class="opt-t">Remise</span><input type="number" min="0" max="100" step="1" id="d-rem" data-rem="1" value="'+esc(d.rem||'')+'" placeholder="%" aria-label="Remise en pourcentage"><span class="small muted">% hors livraison</span><button class="btn btn-sm" data-action="add-remise">Appliquer</button></div></div>'
-   +'<div class="lines" style="margin-top:12px"><div class="line line-hrow line-h"><div>Désignation</div><div>Qté</div><div>PU HT</div><div>PU TTC</div><div style="text-align:right">Total HT</div><div style="text-align:right">Total TTC</div><div></div></div><div id="lines">'+d.lignes.map(lineHtml).join('')+'</div></div>'
+   +'<div class="opt px"><span class="opt-t">'+ic('truck')+'Livraison</span><input type="number" min="0" step="1" id="d-km" data-km="1" value="'+esc(d.km||'')+'" placeholder="km" aria-label="Nombre de kilomètres"><span class="small muted">km × '+esc(String(num(S.set.tarifKm)).replace('.',','))+' €</span><button class="btn btn-sm" data-action="add-delivery">Ajouter</button></div>'
+   +'<div class="opt px"><span class="opt-t">Remise</span><input type="number" min="0" max="100" step="1" id="d-rem" data-rem="1" value="'+esc(d.rem||'')+'" placeholder="%" aria-label="Remise en pourcentage"><span class="small muted">% hors livraison</span><button class="btn btn-sm" data-action="add-remise">Appliquer</button></div></div>'
+   +'<div class="lines" style="margin-top:12px"><div class="line line-hrow line-h"><div>Désignation</div><div>Qté</div><div class="px">PU HT</div><div class="px">PU TTC</div><div class="px" style="text-align:right">Total HT</div><div class="px" style="text-align:right">Total TTC</div><div></div></div><div id="lines">'+d.lignes.map(lineHtml).join('')+'</div></div>'
    +(d.lignes.length?'':'<div class="muted small" id="no-lines" style="margin:6px 0">Aucune ligne. Ajoutez du matériel ou une ligne libre (livraison, installation…).</div>')
    +'</section>'
-   +'<section class="dsec"><h3><span class="dn">4</span>Totaux et notes</h3><div class="totals" id="totals"></div>'
+   +'<section class="dsec"><h3><span class="dn">4</span>Totaux et notes</h3><div class="totals px" id="totals"></div>'
    +'<div class="field"><label for="d-notes">Notes internes</label><textarea id="d-notes" data-field="notes">'+esc(d.notes)+'</textarea></div></section></div>';
   var docs=d.id?docsOf(d.id):[];
   h+='<div class="modal-f">'+(d.id?'<button class="btn btn-danger btn-sm" data-action="del-dossier">'+(S.confirm==='dossier'?'Confirmer la suppression':'Supprimer')+'</button>':'')
-   +'<div class="foot-total"><span class="muted small">Total TTC</span> <b id="ft-total"></b></div>'
-   +docs.map(function(x){return '<button class="btn btn-sm" data-action="open-doc" data-id="'+x.id+'">'+esc(x.numero)+'</button>';}).join('')
-   +(d.id&&(useCaution()||useEdl())?'<button class="btn btn-sm" data-action="open-edl-save">'+edlLabel()+'</button>':'')+'<button class="btn btn-sm" data-action="prep">Bon de préparation</button><button class="btn btn-sm" data-action="make-doc" data-t="facture">Créer une facture</button><button class="btn" data-action="save-dossier">Enregistrer</button><button class="btn btn-primary" data-action="make-doc" data-t="devis">Créer le devis</button></div>';
+   +'<div class="foot-total px"><span class="muted small">Total TTC</span> <b id="ft-total"></b></div>'
+   +docs.map(function(x){return '<button class="btn btn-sm px" data-action="open-doc" data-id="'+x.id+'">'+esc(x.numero)+'</button>';}).join('')
+   +(d.id&&(useCaution()||useEdl())?'<button class="btn btn-sm" data-action="open-edl-save">'+edlLabel()+'</button>':'')+'<button class="btn btn-sm" data-action="prep">Bon de préparation</button><button class="btn btn-sm px" data-action="make-doc" data-t="facture">Créer une facture</button><button class="btn" data-action="save-dossier">Enregistrer</button><button class="btn btn-primary px" data-action="make-doc" data-t="devis">Créer le devis</button></div>';
   S.modal='dossier';openModal(h);refreshDraft();var bg1=document.querySelector('.modal-bg');if(bg1&&sc0)bg1.scrollTop=sc0;
 }
 function refreshDraft(){

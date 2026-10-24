@@ -58,6 +58,58 @@ try {
   cookie = admin;
   r = await call('POST', 'users/1', { active: false }); assert.equal(r.status, 400);
   r = await call('DELETE', 'users/' + gid); assert.equal(r.status, 200);
+  // droits par compte
+  r = await call('POST', 'users', { email: 'limite@test.fr', name: 'Limité', password: 'azertyuiop', role: 'user', deny: ['prix', 'documents', 'inconnu'] }); assert.equal(r.status, 200);
+  assert.deepEqual(r.body.user.deny, ['prix', 'documents']);
+  const lid = r.body.user.id;
+  r = await call('GET', 'users'); assert.deepEqual(r.body.users.find((u) => u.id === lid).deny, ['prix', 'documents']);
+  r = await call('POST', 'users/' + lid, { deny: ['stats', 'reglages'] }); assert.equal(r.status, 200);
+  r = await call('GET', 'users'); assert.deepEqual(r.body.users.find((u) => u.id === lid).deny, ['stats', 'reglages']);
+  const adm = cookie; cookie = '';
+  r = await call('POST', 'login', { email: 'limite@test.fr', password: 'azertyuiop' }); assert.equal(r.status, 200);
+  assert.deepEqual(r.body.user.deny, ['stats', 'reglages']);
+  r = await call('GET', 'me'); assert.deepEqual(r.body.user.deny, ['stats', 'reglages']);
+  r = await call('POST', 'tenants', { societe: 'X', email: 'x@test.fr', password: 'azertyuiop' }); assert.equal(r.status, 403, 'un utilisateur ne crée pas d’espace');
+  cookie = adm;
+  r = await call('GET', 'me'); assert.deepEqual(r.body.user.deny, [], 'un administrateur a tous les droits');
+  // compte temporaire
+  r = await call('POST', 'users', { email: 'temp@test.fr', name: 'Extra week-end', password: 'azertyuiop', role: 'user', until: '2020-01-01' }); assert.equal(r.status, 200);
+  const tid = r.body.user.id; assert.equal(r.body.user.until, '2020-01-01');
+  const adm2 = cookie; cookie = '';
+  r = await call('POST', 'login', { email: 'temp@test.fr', password: 'azertyuiop' }); assert.equal(r.status, 403); assert.equal(r.body.error, 'expire');
+  r = await call('POST', 'login', { email: 'temp@test.fr', password: 'faux' }); assert.equal(r.status, 401, 'mauvais mot de passe : pas d’information sur l’expiration');
+  cookie = adm2;
+  const demain = new Date(Date.now() + 36 * 3600e3).toISOString().slice(0, 10);
+  r = await call('POST', 'users/' + tid, { until: demain }); assert.equal(r.status, 200);
+  cookie = '';
+  r = await call('POST', 'login', { email: 'temp@test.fr', password: 'azertyuiop' }); assert.equal(r.status, 200); assert.equal(r.body.user.until, demain);
+  r = await call('GET', 'sync?since=0'); assert.equal(r.status, 200);
+  const tcookie = cookie; cookie = adm2;
+  r = await call('POST', 'users/' + tid, { until: '2020-01-01' }); assert.equal(r.status, 200);
+  cookie = tcookie;
+  r = await call('GET', 'sync?since=0'); assert.equal(r.status, 401, 'la session d’un compte expiré est coupée');
+  cookie = adm2;
+  r = await call('POST', 'users/' + tid, { until: '' }); assert.equal(r.status, 200);
+  r = await call('GET', 'users'); assert.equal(r.body.users.find((u) => u.id === tid).until, '');
+  // espaces séparés pour d'autres loueurs
+  r = await call('POST', 'tenants', { societe: 'Loueur Test', name: 'Marie', email: 'marie@loueur.fr', password: 'azertyuiop' }); assert.equal(r.status, 200);
+  assert.equal(r.body.tenant.societe, 'Loueur Test');
+  r = await call('POST', 'tenants', { societe: 'Autre', email: 'marie@loueur.fr', password: 'azertyuiop' }); assert.equal(r.status, 409);
+  r = await call('POST', 'tenants', { societe: '', email: 'b@loueur.fr', password: 'azertyuiop' }); assert.equal(r.status, 400);
+  r = await call('POST', 'tenants', { societe: 'Court', email: 'b@loueur.fr', password: 'court' }); assert.equal(r.status, 400);
+  r = await call('GET', 'tenants'); assert.equal(r.status, 200); assert.equal(r.body.tenants.length, 1);
+  cookie = '';
+  r = await call('POST', 'login', { email: 'marie@loueur.fr', password: 'azertyuiop' }); assert.equal(r.status, 200);
+  assert.equal(r.body.user.neutre, true); assert.equal(r.body.user.role, 'admin');
+  r = await call('GET', 'sync?since=0'); assert.equal(r.status, 200);
+  assert.ok(r.body.docs.find((d) => d.col === 'config' && d.id === 'societe' && d.data.nom === 'Loueur Test'), 'le nom de la société est prérempli');
+  assert.equal(r.body.docs.filter((d) => d.col === 'taches').length, 0, 'aucune donnée de l’espace principal');
+  r = await call('GET', 'users'); assert.equal(r.body.users.length, 1, 'comptes de son espace seulement');
+  r = await call('GET', 'tenants'); assert.equal(r.status, 403, 'un autre loueur ne voit pas les espaces');
+  r = await call('POST', 'tenants', { societe: 'Y', email: 'y@test.fr', password: 'azertyuiop' }); assert.equal(r.status, 403);
+  r = await call('POST', 'users', { email: 'employe@loueur.fr', name: 'Employé', password: 'azertyuiop', role: 'user', deny: ['prix'] }); assert.equal(r.status, 200);
+  r = await call('POST', 'users/' + lid, { active: false }); assert.equal(r.status, 404, 'pas d’accès aux comptes d’un autre espace');
+  cookie = adm;
   r = await call('POST', 'logout', {}); assert.equal(r.status, 200);
   console.log('API : tous les tests passent');
 } catch (e) { console.error('ÉCHEC', e); process.exitCode = 1; } finally { server.close(); }

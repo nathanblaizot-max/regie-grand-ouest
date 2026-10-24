@@ -6,6 +6,9 @@ export function makeFakeDb() {
   const row = (u) => ({ id: u.id, tenant: u.tenant, email: u.email, name: u.name, role: u.role, active: u.active });
   async function run(text, v) {
     const t = norm(text);
+    if (t.startsWith("INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT (k) DO UPDATE")) { meta.set(v[0], v[1]); return []; }
+    if (t.startsWith("DELETE FROM meta WHERE k = ?")) { meta.delete(v[0]); return []; }
+    if (t.startsWith("SELECT id, tenant, email, name, active FROM users WHERE tenant <> 'main'")) return users.filter((u) => u.tenant !== 'main' && u.role === 'admin').map((u) => ({ id: u.id, tenant: u.tenant, email: u.email, name: u.name, active: u.active }));
     if (t.startsWith("INSERT INTO meta")) { if (!meta.has('secret')) meta.set('secret', v[0]); return []; }
     if (t.startsWith("SELECT v FROM meta WHERE k = ?")) return meta.has(v[0]) ? [{ v: meta.get(v[0]) }] : [];
     if (t.startsWith("SELECT v FROM meta")) return [{ v: meta.get('secret') }];

@@ -195,13 +195,14 @@
     '.web-card{width:100%;max-width:420px;background:var(--surface,#fff);color:var(--ink,#023047);border:1px solid var(--line,#DCE5EB);border-radius:16px 4px 16px 4px;padding:22px;box-shadow:var(--shadow,0 10px 28px rgba(2,48,71,.12));display:grid;gap:12px;font-family:var(--font-body,system-ui,sans-serif)}' +
     '.web-card.wide{max-width:640px}.web-card h2{font-family:var(--font-display,inherit);margin:0;font-size:22px}' +
     '.web-card label{display:grid;gap:4px;font-size:13px;font-weight:600}.web-card input,.web-card select{padding:10px 12px;border:1px solid var(--line,#DCE5EB);border-radius:10px;background:var(--bg,#fff);color:inherit;font:inherit}' +
+    '.web-card label.web-ck{display:flex;gap:8px;align-items:flex-start;font-weight:500;font-size:14px}.web-card label.web-ck input{width:auto;padding:0;margin-top:3px}.web-card label.web-ck small{display:block;color:var(--muted,#5b7080);font-weight:400}.web-rights{display:grid;gap:8px;padding:10px 12px;border:1px solid var(--line,#DCE5EB);border-radius:10px}' +
     '.web-card .btn{padding:10px 14px;border-radius:10px;border:1px solid var(--line,#DCE5EB);background:var(--surface,#fff);color:inherit;font:inherit;cursor:pointer}' +
     '.web-card .btn.p{background:var(--gold,#D0BB63);color:var(--gold-ink,#023047);border-color:transparent;font-weight:700}' +
     '.web-card .err{color:var(--bad,#B93232);font-size:13px;min-height:1.2em}.web-card .muted{color:var(--muted,#51697A);font-size:13px}' +
     '.web-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:space-between;padding:8px 0;border-top:1px solid var(--line,#DCE5EB)}.web-logo{max-width:180px;max-height:64px;object-fit:contain}';
   function injectCss() { if (document.getElementById('web-css')) return; var s = document.createElement('style'); s.id = 'web-css'; s.textContent = CSS; document.head.appendChild(s); }
   function msgFor(code) {
-    return ({ identifiants: 'E-mail ou mot de passe incorrect.', 'trop-de-tentatives': 'Trop de tentatives : réessayez dans 10 minutes.', code: 'Code de première configuration incorrect.', email: 'Adresse e-mail invalide.', 'mot-de-passe-court': 'Le mot de passe doit faire au moins 8 caractères.', 'deja-configure': 'Le site est déjà configuré : connectez-vous.', existe: 'Cette adresse a déjà un compte.', 'ancien-mot-de-passe': 'Ancien mot de passe incorrect.', 'soi-meme': 'Action impossible sur votre propre compte.' })[code] || 'Une erreur est survenue. Réessayez.';
+    return ({ identifiants: 'E-mail ou mot de passe incorrect.', 'trop-de-tentatives': 'Trop de tentatives : réessayez dans 10 minutes.', code: 'Code de première configuration incorrect.', email: 'Adresse e-mail invalide.', societe: 'Indiquez le nom de la société du loueur.', expire: 'Ce compte était temporaire : sa date de validité est dépassée.', 'mot-de-passe-court': 'Le mot de passe doit faire au moins 8 caractères.', 'deja-configure': 'Le site est déjà configuré : connectez-vous.', existe: 'Cette adresse a déjà un compte.', 'ancien-mot-de-passe': 'Ancien mot de passe incorrect.', 'soi-meme': 'Action impossible sur votre propre compte.' })[code] || 'Une erreur est survenue. Réessayez.';
   }
   function showLogin(needSetup) {
     injectCss();
@@ -247,26 +248,68 @@
     document.body.appendChild(m); return m;
   }
   function closeModal() { var m = document.getElementById('web-modal'); if (m) m.remove(); }
+  var DROITS = [
+    ['prix', 'Voir les prix et les montants', 'Sinon : prix masqués, et Devis et factures, Caisse et Statistiques indisponibles'],
+    ['documents', 'Devis et factures'], ['caisse', 'Caisse évènement'], ['clients', 'Clients'], ['materiel', 'Matériel'],
+    ['entretien', 'Entretien'], ['ik', 'Indemnités km'], ['stats', 'Statistiques'], ['reglages', 'Réglages'], ['mails', 'Mails']
+  ];
+  function rightsBox(prefix, deny) {
+    return '<div class="web-rights" id="' + prefix + '-rights"><div class="muted">Ce que ce compte peut voir et utiliser (décoche pour retirer l\'accès) :</div>' +
+      DROITS.map(function (d) {
+        return '<label class="web-ck"><input type="checkbox" data-k="' + d[0] + '"' + (deny.indexOf(d[0]) < 0 ? ' checked' : '') + '><span>' + esc(d[1]) + (d[2] ? '<small>' + esc(d[2]) + '</small>' : '') + '</span></label>';
+      }).join('') + '</div>';
+  }
+  function readDeny(prefix) {
+    var out = []; document.querySelectorAll('#' + prefix + '-rights input[data-k]').forEach(function (i) { if (!i.checked) out.push(i.dataset.k); }); return out;
+  }
   function accounts() {
-    api('GET', 'users').then(function (r) {
+    var isMain = me && me.role === 'admin' && !me.neutre;
+    Promise.all([api('GET', 'users'), isMain ? api('GET', 'tenants') : Promise.resolve(null)]).then(function (rs) {
+      var r = rs[0], tr = rs[1], users = r.body && r.body.users;
       if (r.status !== 200) { alert_(msgFor(r.body && r.body.error)); return; }
-      var rows = r.body.users.map(function (u) {
-        return '<div class="web-row"><div><b>' + esc(u.name || u.email) + '</b><div class="muted">' + esc(u.email) + ' · ' + (u.role === 'admin' ? 'administrateur' : 'utilisateur') + (u.active ? '' : ' · désactivé') + '</div></div><div>' +
+      var byId = {}; users.forEach(function (u) { byId[u.id] = u; });
+      var rows = users.map(function (u) {
+        var lim = (u.role !== 'admin' && u.deny && u.deny.length ? ' · accès limité' : '') + (u.until ? (u.until < new Date().toLocaleDateString('sv-SE') ? ' · expiré le ' : ' · jusqu\'au ') + u.until.split('-').reverse().join('/') : '');
+        return '<div class="web-row"><div><b>' + esc(u.name || u.email) + '</b><div class="muted">' + esc(u.email) + ' · ' + (u.role === 'admin' ? 'administrateur' : 'utilisateur') + lim + (u.active ? '' : ' · désactivé') + '</div></div><div>' +
+          (u.role !== 'admin' ? '<button class="btn" data-w="rights" data-id="' + u.id + '">Droits</button> ' : '') +
           '<button class="btn" data-w="reset" data-id="' + u.id + '">Nouveau mot de passe</button> ' +
           (u.id !== me.id ? '<button class="btn" data-w="toggle" data-id="' + u.id + '" data-a="' + (u.active ? 0 : 1) + '">' + (u.active ? 'Désactiver' : 'Réactiver') + '</button> <button class="btn" data-w="del" data-id="' + u.id + '">Supprimer</button>' : '') + '</div></div>';
       }).join('');
+      var espaces = '';
+      if (isMain) {
+        var list = tr && tr.status === 200 ? tr.body.tenants : [];
+        espaces = '<h3 style="margin:14px 0 0;font-size:16px">Espaces d\'autres loueurs</h3><div class="muted">Un espace est entièrement séparé du vôtre : ses données (clients, devis, matériel…) et ses comptes ne se mélangent jamais avec les vôtres.</div>' +
+          list.map(function (t) { return '<div class="web-row"><div><b>' + esc(t.name || t.email) + '</b><div class="muted">' + esc(t.email) + (t.active ? '' : ' · désactivé') + '</div></div></div>'; }).join('') +
+          '<label>Nom de la société du loueur<input id="t-soc"></label><label>Nom de l\'administrateur<input id="t-name"></label><label>E-mail de l\'administrateur<input id="t-email" type="email"></label><label>Mot de passe provisoire (8 caractères minimum)<input id="t-pass" type="text" autocomplete="off"></label>' +
+          '<div class="err" id="t-err"></div><div class="web-row"><span class="muted" id="t-ok"></span><button class="btn" data-w="tenant">Créer l\'espace</button></div>';
+      }
       var m = modal('<h2>Comptes</h2><div class="muted">Chaque personne se connecte avec son e-mail et son mot de passe.</div>' + rows +
         '<h3 style="margin:10px 0 0;font-size:16px">Ajouter un compte</h3><label>Nom<input id="n-name"></label><label>E-mail<input id="n-email" type="email"></label><label>Mot de passe (8 caractères minimum)<input id="n-pass" type="text" autocomplete="off"></label>' +
-        '<label>Droits<select id="n-role"><option value="user">Utilisateur</option><option value="admin">Administrateur (gère les comptes)</option></select></label><div class="err" id="n-err"></div>' +
-        '<div class="web-row"><button class="btn" data-w="close">Fermer</button><button class="btn p" data-w="add">Ajouter le compte</button></div>');
+        '<label>Type de compte<select id="n-role"><option value="user">Utilisateur (accès réglable)</option><option value="admin">Administrateur (tous les droits, gère les comptes)</option></select></label>' + rightsBox('n', []) + '<label id="n-until-l">Compte temporaire : valable jusqu\'au (facultatif, inclus)<input id="n-until" type="date"></label><div class="err" id="n-err"></div>' +
+        '<div class="web-row"><button class="btn" data-w="close">Fermer</button><button class="btn p" data-w="add">Ajouter le compte</button></div>' + espaces);
+      m.addEventListener('change', function (e) {
+        if (e.target.id === 'n-role') document.getElementById('n-rights').style.display = document.getElementById('n-until-l').style.display = e.target.value === 'admin' ? 'none' : '';
+      });
       m.addEventListener('click', function (e) {
         var b = e.target.closest('[data-w]'); if (!b) return; var w = b.dataset.w, id = b.dataset.id;
         if (w === 'close') closeModal();
-        else if (w === 'add') api('POST', 'users', { name: document.getElementById('n-name').value, email: document.getElementById('n-email').value, password: document.getElementById('n-pass').value, role: document.getElementById('n-role').value }).then(function (x) { if (x.status === 200) accounts(); else document.getElementById('n-err').textContent = msgFor(x.body && x.body.error); });
+        else if (w === 'add') api('POST', 'users', { name: document.getElementById('n-name').value, email: document.getElementById('n-email').value, password: document.getElementById('n-pass').value, role: document.getElementById('n-role').value, deny: readDeny('n'), until: document.getElementById('n-until').value }).then(function (x) { if (x.status === 200) accounts(); else document.getElementById('n-err').textContent = msgFor(x.body && x.body.error); });
+        else if (w === 'tenant') api('POST', 'tenants', { societe: document.getElementById('t-soc').value, name: document.getElementById('t-name').value, email: document.getElementById('t-email').value, password: document.getElementById('t-pass').value }).then(function (x) {
+          if (x.status === 200) { accounts(); } else document.getElementById('t-err').textContent = msgFor(x.body && x.body.error);
+        });
+        else if (w === 'rights') rightsModal(byId[id]);
         else if (w === 'toggle') api('POST', 'users/' + id, { active: b.dataset.a === '1' }).then(accounts);
         else if (w === 'del') { if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'Confirmer'; } else api('DELETE', 'users/' + id).then(accounts); }
         else if (w === 'reset') resetPw(id);
       });
+    });
+  }
+  function rightsModal(u) {
+    var m = modal('<h2>Droits de ' + esc(u.name || u.email) + '</h2>' + rightsBox('r', u.deny || []) + '<label>Compte temporaire : valable jusqu\'au (laisser vide = sans limite, date incluse)<input id="r-until" type="date" value="' + esc(u.until || '') + '"></label><div class="muted">Ces limites s\'appliquent à l\'affichage de l\'application. Pour un accès sans restriction, créez un compte administrateur.</div><div class="err" id="r-err"></div><div class="web-row"><button class="btn" data-w="back">Retour</button><button class="btn p" data-w="ok">Enregistrer</button></div>');
+    m.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-w]'); if (!b) return;
+      if (b.dataset.w === 'back') accounts();
+      if (b.dataset.w === 'ok') api('POST', 'users/' + u.id, { deny: readDeny('r'), until: document.getElementById('r-until').value }).then(function (x) { if (x.status === 200) accounts(); else document.getElementById('r-err').textContent = msgFor(x.body && x.body.error); });
     });
   }
   function resetPw(id) {

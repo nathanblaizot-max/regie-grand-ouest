@@ -80,9 +80,33 @@ async function currentUser(db, req) {
   if (!p) return null;
   const rows = await db.sql`SELECT id, tenant, email, name, role, active FROM users WHERE id = ${p.u}`;
   const u = rows[0];
-  return u && u.active ? u : null;
+  return u && u.active && !(await expired(db, u)) ? u : null;
 }
 const pub = (u) => ({ id: u.id, email: u.email, name: u.name, role: u.role, neutre: u.tenant !== undefined && u.tenant !== 'main' });
+// Droits d'un compte « utilisateur » : liste de ce qui lui est retiré (meta « deny:<id> »). Un administrateur a tous les droits.
+const DENY_KEYS = ['prix', 'documents', 'caisse', 'clients', 'materiel', 'entretien', 'ik', 'stats', 'reglages', 'mails'];
+const cleanDeny = (a) => (Array.isArray(a) ? [...new Set(a.map(String).filter((k) => DENY_KEYS.includes(k)))] : []);
+async function getDeny(db, id) {
+  const r = await db.sql`SELECT v FROM meta WHERE k = ${'deny:' + id}`;
+  if (!r.length) return [];
+  try { return cleanDeny(JSON.parse(r[0].v)); } catch (e) { return []; }
+}
+async function setDeny(db, id, deny) {
+  const v = JSON.stringify(cleanDeny(deny));
+  await db.sql`INSERT INTO meta (k, v) VALUES (${'deny:' + id}, ${v}) ON CONFLICT (k) DO UPDATE SET v = ${v}`;
+}
+// Compte temporaire : date limite incluse (jour de Paris), meta « until:<id> ». Ne concerne que les comptes « utilisateur ».
+const parisDay = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' });
+async function getUntil(db, id) {
+  const r = await db.sql`SELECT v FROM meta WHERE k = ${'until:' + id}`;
+  return r.length ? r[0].v : '';
+}
+async function setUntil(db, id, d) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(d || ''))) { const v = String(d); await db.sql`INSERT INTO meta (k, v) VALUES (${'until:' + id}, ${v}) ON CONFLICT (k) DO UPDATE SET v = ${v}`; }
+  else await db.sql`DELETE FROM meta WHERE k = ${'until:' + id}`;
+}
+async function expired(db, u) { if (u.role === 'admin') return false; const d = await getUntil(db, u.id); return !!d && parisDay() > d; }
+async function pubFull(db, u) { return { ...pub(u), deny: u.role === 'admin' ? [] : await getDeny(db, u.id), until: u.role === 'admin' ? '' : await getUntil(db, u.id) }; }
 const validEmail = (e) => /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(e);
 
 async function body(req) {
@@ -196,7 +220,7 @@ export async function handle(req, db, opts = {}) {
     // ---- Sans session : état, première configuration, connexion
     if (path === 'me' && method === 'GET') {
       const u = await currentUser(db, req);
-      if (u) return J({ user: pub(u) });
+      if (u) return J({ user: await pubFull(db, u) });
       const n = await db.sql`SELECT count(*)::int AS n FROM users`;
       return J({ user: null, needSetup: n[0].n === 0 }, 401);
     }
@@ -210,7 +234,7 @@ export async function handle(req, db, opts = {}) {
       if (String(b.password || '').length < 8) return J({ error: 'mot-de-passe-court' }, 400);
       const hash = await hashPassword(String(b.password));
       const rows = await db.sql`INSERT INTO users (email, name, pass_hash, role) VALUES (${email}, ${String(b.name || '').trim()}, ${hash}, 'admin') RETURNING id, tenant, email, name, role, active`;
-      return J({ user: pub(rows[0]) }, 200, { 'set-cookie': await startSession(db, rows[0]) });
+      return J({ user: await pubFull(db, rows[0]) }, 200, { 'set-cookie': await startSession(db, rows[0]) });
     }
     if (path === 'login' && method === 'POST') {
       if (tooMany(ip)) return J({ error: 'trop-de-tentatives' }, 429);
@@ -220,7 +244,8 @@ export async function handle(req, db, opts = {}) {
       const u = rows[0];
       const ok = u && u.active && (await checkPassword(String(b.password || ''), u.pass_hash));
       if (!ok) { fails.get(ip).push(Date.now()); await wait(400); return J({ error: 'identifiants' }, 401); }
-      return J({ user: pub(u) }, 200, { 'set-cookie': await startSession(db, u) });
+      if (await expired(db, u)) return J({ error: 'expire' }, 403);
+      return J({ user: await pubFull(db, u) }, 200, { 'set-cookie': await startSession(db, u) });
     }
     if (path === 'logout' && method === 'POST') return J({ ok: true }, 200, { 'set-cookie': cookieHeader('', 0) });
 
@@ -349,6 +374,7 @@ export async function handle(req, db, opts = {}) {
     if (path === 'users' && method === 'GET') {
       if (!isAdmin) return J({ error: 'interdit' }, 403);
       const rows = await db.sql`SELECT id, email, name, role, active FROM users WHERE tenant = ${me.tenant} ORDER BY id`;
+      for (const r of rows) { r.deny = r.role === 'admin' ? [] : await getDeny(db, r.id); r.until = r.role === 'admin' ? '' : await getUntil(db, r.id); }
       return J({ users: rows });
     }
     if (path === 'users' && method === 'POST') {
@@ -362,7 +388,34 @@ export async function handle(req, db, opts = {}) {
       const ex = await db.sql`SELECT id FROM users WHERE email = ${email}`;
       if (ex.length) return J({ error: 'existe' }, 409);
       const rows = await db.sql`INSERT INTO users (tenant, email, name, pass_hash, role) VALUES (${me.tenant}, ${email}, ${String(b.name || '').trim()}, ${hash}, ${role}) RETURNING id, email, name, role, active`;
+      if (role !== 'admin') { await setDeny(db, rows[0].id, b.deny); if (b.until) await setUntil(db, rows[0].id, b.until); }
+      rows[0].deny = role === 'admin' ? [] : cleanDeny(b.deny);
+      rows[0].until = role === 'admin' || !/^\d{4}-\d{2}-\d{2}$/.test(String(b.until || '')) ? '' : String(b.until);
       return J({ user: rows[0] });
+    }
+    // ---- Espaces séparés pour d'autres loueurs : réservé à l'administrateur de l'espace principal
+    if (path === 'tenants' && method === 'GET') {
+      if (!isAdmin || me.tenant !== 'main') return J({ error: 'interdit' }, 403);
+      const rows = await db.sql`SELECT id, tenant, email, name, active FROM users WHERE tenant <> 'main' AND role = 'admin' ORDER BY id`;
+      return J({ tenants: rows });
+    }
+    if (path === 'tenants' && method === 'POST') {
+      if (!isAdmin || me.tenant !== 'main') return J({ error: 'interdit' }, 403);
+      const b = await body(req);
+      const email = String(b.email || '').trim().toLowerCase();
+      const societe = String(b.societe || '').trim().slice(0, 120);
+      if (!societe) return J({ error: 'societe' }, 400);
+      if (!validEmail(email)) return J({ error: 'email' }, 400);
+      if (String(b.password || '').length < 8) return J({ error: 'mot-de-passe-court' }, 400);
+      const ex = await db.sql`SELECT id FROM users WHERE email = ${email}`;
+      if (ex.length) return J({ error: 'existe' }, 409);
+      const tenant = 'c' + crypto.randomBytes(6).toString('hex');
+      const hash = await hashPassword(String(b.password));
+      const rows = await db.sql`INSERT INTO users (tenant, email, name, pass_hash, role) VALUES (${tenant}, ${email}, ${String(b.name || '').trim()}, ${hash}, ${'admin'}) RETURNING id, email, name, role, active`;
+      const json = JSON.stringify({ nom: societe });
+      await db.sql`INSERT INTO docs (tenant, col, id, data, deleted) VALUES (${tenant}, ${'config'}, ${'societe'}, ${json}::jsonb, false)
+        ON CONFLICT (tenant, col, id) DO UPDATE SET data = ${json}::jsonb, deleted = false, seq = nextval('docs_seq')`;
+      return J({ tenant: { id: rows[0].id, tenant, email, name: rows[0].name, societe, active: true } });
     }
     const um = path.match(/^users\/(\d+)$/);
     if (um) {
@@ -373,6 +426,8 @@ export async function handle(req, db, opts = {}) {
       if (method === 'DELETE') {
         if (id === me.id) return J({ error: 'soi-meme' }, 400);
         await db.sql`DELETE FROM users WHERE id = ${id}`;
+        await db.sql`DELETE FROM meta WHERE k = ${'deny:' + id}`;
+        await db.sql`DELETE FROM meta WHERE k = ${'until:' + id}`;
         return J({ ok: true });
       }
       if (method === 'POST') {
@@ -390,6 +445,8 @@ export async function handle(req, db, opts = {}) {
           if (id === me.id && b.role !== 'admin') return J({ error: 'soi-meme' }, 400);
           await db.sql`UPDATE users SET role = ${b.role === 'admin' ? 'admin' : 'user'} WHERE id = ${id}`;
         }
+        if (b.deny !== undefined) await setDeny(db, id, b.deny);
+        if (b.until !== undefined) await setUntil(db, id, b.until);
         return J({ ok: true });
       }
     }
