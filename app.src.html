@@ -407,12 +407,53 @@ function conflits(){
   out.days=days;return out;
 }
 function dispoInfo(m){return Math.max(0,num(m.stock)-num(m.horsService));}
+/* Numérotation des factures : point de départ choisi à la première facture (reprise d'un ancien outil) */
+function factDep(){var d=S.set.factDepart;return d&&typeof d.n==='number'?d:null;}
+function needFactStart(){return S.set.factDepart===undefined&&!S.documents.some(function(d){return d.type==='facture';});}
+function parseFactStart(txt){
+  var m=String(txt||'').trim().match(/^(.*?)(\d+)$/);if(!m)return null;
+  var y=new Date().getFullYear();
+  return {ok:1,tpl:m[1].split(String(y)).join('{Y}'),n:parseInt(m[2],10),width:m[2].length,y:y};
+}
+function factLabel(dep,n){var y=new Date().getFullYear();return dep.tpl.split('{Y}').join(y)+String(n).padStart(dep.width||1,'0');}
 function nextNumber(type){
+  var dep=type==='facture'?factDep():null;
+  if(dep){
+    var y0=new Date().getFullYear(),pre0=dep.tpl.split('{Y}').join(y0),mx=(dep.tpl.indexOf('{Y}')<0||dep.y===y0)?dep.n:0;
+    S.documents.forEach(function(d){if(d.type===type&&String(d.numero).indexOf(pre0)===0){var r=String(d.numero).slice(pre0.length);if(/^\d+$/.test(r)){var n0=parseInt(r,10);if(n0>mx)mx=n0;}}});
+    return pre0+String(mx+1).padStart(dep.width||1,'0');
+  }
   var y=new Date().getFullYear(),pre=(type==='devis'?'D':'F')+'-'+y+'-',max=0;
   S.documents.forEach(function(d){if(d.type===type&&String(d.numero).indexOf(pre)===0){var n=parseInt(String(d.numero).slice(pre.length),10);if(n>max)max=n;}});
   return pre+pad4(max+1);
 }
 function pad4(n){return String(n).padStart(4,'0');}
+function askFactStart(cb,edit){
+  var old=document.getElementById('fs-root');if(old)old.remove();
+  var cur=factDep(),el=document.createElement('div');el.id='fs-root';el.className='modal-bg';
+  el.innerHTML='<div class="modal" role="dialog" aria-modal="true" aria-labelledby="fs-t">'+'<div class="modal-h"><h2 id="fs-t">Numérotation des factures</h2></div>'
+   +'<div class="modal-b"><p>Par quel numéro voulez-vous commencer ?</p>'
+   +'<p class="small muted">Si vous utilisiez déjà un autre outil, indiquez le <b>dernier numéro de facture que vous avez émis</b> (par exemple <b>28-64</b>) : la prochaine facture portera le numéro suivant (28-65). La loi impose une numérotation continue, sans trou ni doublon.'+(edit?' Ne modifiez ce point de départ que si vous savez ce que vous faites : des factures sont peut-être déjà numérotées.':'')+'</p>'
+   +'<div class="field"><label for="fs-in">Dernier numéro de facture déjà émis</label><input id="fs-in" autocomplete="off" placeholder="Exemple : 28-64 ou F-2026-0127" value="'+esc(cur?factLabel(cur,cur.n):'')+'"></div>'
+   +'<div class="small" id="fs-prev" style="margin-top:6px"></div>'
+   +'<p class="small muted">'+(edit?'':'C\'est votre première facture ? Choisissez « Commencer à 1 » : la numérotation sera F-'+new Date().getFullYear()+'-0001, puis 0002…')+'</p></div>'
+   +'<div class="modal-f"><button class="btn" id="fs-cancel">Annuler</button>'+(edit?'':'<button class="btn" id="fs-one">Commencer à 1</button>')+'<button class="btn btn-primary" id="fs-ok">Valider</button></div></div>';
+  document.body.appendChild(el);
+  var inp=el.querySelector('#fs-in'),prev=el.querySelector('#fs-prev');
+  function upd(){var d=parseFactStart(inp.value);prev.textContent=inp.value.trim()?(d?'Prochaine facture : '+factLabel(d,d.n+1):'Le numéro doit se terminer par des chiffres (exemple : 28-64).'):'';}
+  inp.addEventListener('input',upd);upd();inp.focus();
+  function done(val){
+    S.set=Object.assign({},S.set,{factDepart:val});
+    S.db.doc('config/societe').update({factDepart:val}).then(function(){el.remove();if(cb)cb();}).catch(dbErr);
+  }
+  el.querySelector('#fs-cancel').addEventListener('click',function(){el.remove();});
+  var one=el.querySelector('#fs-one');if(one)one.addEventListener('click',function(){done({ok:1});});
+  el.querySelector('#fs-ok').addEventListener('click',function(){
+    if(!inp.value.trim()){if(edit){done({ok:1});}else toast('Indiquez le dernier numéro, ou choisissez « Commencer à 1 ».');return;}
+    var d=parseFactStart(inp.value);if(!d){toast('Le numéro doit se terminer par des chiffres (exemple : 28-64).');return;}
+    done(d);
+  });
+}
 function clientName(id){var c=byId(S.clients,id);return c?c.nom:'—';}
 function dossierTotals(d){return totals(d.lignes,S.set.regimeTva==='franchise');}
 function isLate(doc){return doc.type==='facture'&&doc.statut==='emise'&&doc.dateEcheance&&doc.dateEcheance<today();}
@@ -1845,6 +1886,7 @@ function vReglages(){
    +'<h3>Délais et mentions</h3><div class="form-grid">'+f('delaiPaiement','Délai de paiement (jours)',s.delaiPaiement,'number')+f('validiteDevis','Validité d\'un devis (jours)',s.validiteDevis,'number')+f('emailComptable','E-mail du comptable (caisse évènement)',s.emailComptable||'','email')+'</div>'
    +'<div class="field"><label for="s-penalites">Pénalités de retard (mention sur les factures)</label><textarea id="s-penalites">'+esc(s.penalites)+'</textarea></div>'
    +'<div class="field"><label for="s-conditions">Conditions de location (caution, retrait, restitution, annulation)</label><textarea id="s-conditions" placeholder="À compléter avec vos conditions">'+esc(s.conditions)+'</textarea></div>'
+   +'<h3>Numérotation des factures</h3><div class="toolbar" style="margin:0"><span class="small">'+(factDep()?'Reprise après le numéro <b>'+esc(factLabel(factDep(),factDep().n))+'</b> (prochaine facture : '+esc(nextNumber('facture'))+').':'Numérotation automatique (prochaine facture : '+esc(nextNumber('facture'))+').')+'</span><button class="btn btn-sm" data-action="edit-factstart">Modifier le point de départ</button></div>'
    +'<h3>Fonctions facultatives</h3><div class="form-grid"><div class="field"><label for="s-modCaution">Suivi des cautions</label><select id="s-modCaution"><option value="oui"'+(s.modCaution!=='non'?' selected':'')+'>Activé</option><option value="non"'+(s.modCaution==='non'?' selected':'')+'>Désactivé</option></select></div><div class="field"><label for="s-modEdl">États des lieux (photos, casses)</label><select id="s-modEdl"><option value="oui"'+(s.modEdl!=='non'?' selected':'')+'>Activé</option><option value="non"'+(s.modEdl==='non'?' selected':'')+'>Désactivé</option></select></div></div>'
    +'<div class="field"><label for="s-cgv">Conditions générales de location (CGV, ajoutées en dernière page des devis et du contrat)</label><textarea id="s-cgv" rows="8" placeholder="Objet, durée, retrait et restitution, caution, responsabilité, annulation, litiges…">'+esc(s.cgv||'')+'</textarea></div>'
    +'<div class="field"><label for="s-mediateur">Médiateur de la consommation (nom, adresse, site : affiché sur les devis et factures)</label><textarea id="s-mediateur" rows="3" placeholder="Nom du médiateur, adresse postale, site internet">'+esc(s.mediateur||'')+'</textarea></div>'
@@ -2082,6 +2124,7 @@ function persistDossier(cb){
   }else write(d.clientId);
 }
 function makeDocument(type){
+  if(type==='facture'&&needFactStart()){askFactStart(function(){makeDocument(type);});return;}
   persistDossier(function(id,o){
     var c=byId(S.clients,o.clientId)||S.draft.cs||{nom:'',adresse:'',email:'',tel:'',siret:''};
     var franchise=S.set.regimeTva==='franchise',t=today(),tt=totals(o.lignes,franchise);
@@ -2588,6 +2631,7 @@ var A={
     var fr=new FileReader();fr.onload=function(){go(String(fr.result).split(',')[1]||'');};fr.onerror=function(){go('');};fr.readAsDataURL(pb);
   },
   'reset-colors':function(){S.set=Object.assign({},S.set,{couleurPrincipale:'',couleurAccent:''});applyTheme();S.db.doc('config/societe').update({couleurPrincipale:'',couleurAccent:''}).then(function(){toast('Couleurs d\'origine rétablies');}).catch(dbErr);schedule();},
+  'edit-factstart':function(){askFactStart(function(){toast('Point de départ enregistré');render();},true);},
   'reset-logo':function(){S.set=Object.assign({},S.set,{logo:'',logoR:0});S.db.doc('config/societe').update({logo:'',logoR:0}).then(function(){toast('Logo d\'origine rétabli');}).catch(dbErr);schedule();},
   'add-line':function(){S.draft.lignes.push({materielId:'',designation:'',qte:1,puHT:0,tva:S.set.regimeTva==='franchise'?0:num(S.set.tvaDefaut)});renderDossierModal();},
   'add-delivery':function(){
@@ -2673,6 +2717,7 @@ var A={
   'sel-doc':function(t){var id=t.dataset.id;if(SEL[id])delete SEL[id];else SEL[id]=true;refreshList();},
   'grp-clear':function(){SEL={};refreshList();},
   'grp-facturer':function(){
+    if(needFactStart()){askFactStart(function(){A['grp-facturer']();});return;}
     var ds=Object.keys(SEL).map(function(id){return byId(S.documents,id);}).filter(function(x){return x&&x.type==='devis'&&!docFacture(x.id)&&x.statut!=='refuse';});
     if(ds.length<2){toast('Sélectionnez au moins 2 devis.');return;}
     if(ds.some(function(x){return x.clientId!==ds[0].clientId;})){toast('Les devis doivent appartenir au même client.');return;}
@@ -2734,6 +2779,7 @@ var A={
   'cancel-fact':function(){var d=curDoc();if(S.confirm!=='fact'){S.confirm='fact';openDoc(d.id);return;}S.confirm='';S.db.collection('documents').doc(d.id).update({statut:'annulee'}).then(function(){toast('Facture annulée');var id=d.id;setTimeout(function(){openDoc(id);},250);}).catch(dbErr);},
   'del-doc':function(){var d=curDoc();if(S.confirm!=='doc'){S.confirm='doc';openDoc(d.id);return;}S.db.collection('documents').doc(d.id).delete().then(function(){toast('Devis supprimé');closeModal();}).catch(dbErr);},
   'devis-to-facture':function(){
+    if(needFactStart()){askFactStart(function(){A['devis-to-facture']();});return;}
     var d=curDoc();if(!d)return;
     var t=today(),doc=Object.assign({},d);delete doc.id;
     doc.type='facture';doc.numero=nextNumber('facture');doc.dateEmission=t;doc.dateEcheance=addDays(t,num(S.set.delaiPaiement)||30);doc.statut='emise';delete doc.dateValidite;delete doc.signature;delete doc.signataire;delete doc.dateSignature;delete doc.signToken;delete doc.signeEnLigne;delete doc.signeLe;delete doc.signeIp;doc.devisId=d.id;
