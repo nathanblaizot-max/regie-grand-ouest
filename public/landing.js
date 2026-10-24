@@ -2,7 +2,7 @@
 (function () {
   var CONTACT = 'nathan.blaizot@gmail.com'; // adresse affichée pour « Demander une démo »
   var NOM = 'Loc en poche';
-  var SIGNATURE = 'fait par Toutoune';
+  var SIGNATURE = '';
 
   var CSS = '' +
     '#web-landing{--l-bg:#F6F8FA;--l-surface:#fff;--l-ink:#0B2A3A;--l-muted:#4F6676;--l-line:#DDE6EC;--l-navy:#023047;--l-navy2:#0A4560;--l-gold:#D0BB63;--l-gold-ink:#1E2A10;--l-soft:#EEF3F6;' +
@@ -133,7 +133,7 @@
     ];
     var cards = feat.map(function (f) { return '<article class="lp-card"><div class="ic">' + ICONS[f[0]] + '</div><h3>' + f[1] + '</h3><p>' + f[2] + '</p></article>'; }).join('');
     return '' +
-      '<header class="lp-head"><div class="lp-wrap"><div class="lp-brand"><img src="/icon-192.png" alt="" width="34" height="34"><div>' + NOM + '<small>' + SIGNATURE + '</small></div></div>' +
+      '<header class="lp-head"><div class="lp-wrap"><div class="lp-brand"><img src="/icon-192.png" alt="" width="34" height="34"><div>' + NOM + (SIGNATURE ? '<small>' + SIGNATURE + '</small>' : '') + '</div></div>' +
       '<button class="lp-btn gold" data-lp="login" type="button">Se connecter</button></div></header>' +
       '<main>' +
       '<section class="lp-hero"><div class="lp-wrap"><div>' +
@@ -172,7 +172,7 @@
       '<section class="lp-final" id="lp-final"><div class="lp-wrap"><h2>Prêt à gagner du temps sur chaque location ?</h2><p>Dis-nous qui tu es et comment tu travailles : on crée ton compte pour ton essai gratuit de 7 jours et on te montre l’appli en direct sur un cas réel.</p>' + formHtml() +
       '<p style="font-size:14px;margin-top:18px">Tu as déjà un compte ? <button class="lp-btn ghost" data-lp="login" type="button" style="min-height:38px;margin-left:6px">Se connecter</button></p>' +
       '<p style="font-size:14px;margin-top:12px">Ou écris-nous directement : <a href="mailto:' + CONTACT + '">' + CONTACT + '</a></p></div></section>' +
-      '</main><footer class="lp-foot"><div class="lp-wrap"><div>' + NOM + ' ' + SIGNATURE + '</div><div>Conçu en Normandie pour les loueurs de matériel évènementiel.</div><div class="lp-legal"><a href="/mentions-legales">Mentions légales</a> · <a href="/conditions">Conditions générales</a> · <a href="/confidentialite">Confidentialité</a></div></div></footer>';
+      '</main><footer class="lp-foot"><div class="lp-wrap"><div>' + NOM + (SIGNATURE ? ' ' + SIGNATURE : '') + '</div><div>Conçu en Normandie pour les loueurs de matériel évènementiel.</div><div class="lp-legal"><a href="/mentions-legales">Mentions légales</a> · <a href="/conditions">Conditions générales</a> · <a href="/confidentialite">Confidentialité</a></div></div></footer>';
   }
 
   function show(onLogin) {
