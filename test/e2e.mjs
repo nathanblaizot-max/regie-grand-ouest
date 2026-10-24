@@ -54,6 +54,7 @@ try {
   await page.click('#mat-res .pick-row:has-text("Chaise")');
   await page.waitForSelector('#lines .line');
   await page.click('button:has-text("Créer le devis")');
+  await page.waitForSelector('#fs-one'); await page.click('#fs-one'); // premier devis : numéro de départ
   await page.waitForTimeout(1500);
   // le devis doit exister côté serveur
   const docs = await page.evaluate(() => fetch('/api/sync?since=0&limit=500', { credentials: 'same-origin' }).then((r) => r.json()));

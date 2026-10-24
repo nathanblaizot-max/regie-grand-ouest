@@ -73,12 +73,31 @@ try {
   // 3. Réglages : le point de départ est visible et modifiable
   await page.keyboard.press('Escape'); await page.waitForTimeout(300);
   await page.click('nav.nav button:has-text("Réglages")');
-  await page.waitForSelector('text=Reprise après le numéro');
+  await page.waitForSelector('text=reprise après le numéro');
   assert.ok((await page.locator('main.main').innerText()).includes('28-64'));
-  await page.click('[data-action=edit-factstart]');
+  await page.click('[data-action=edit-factstart][data-t=facture]');
   await page.waitForSelector('#fs-in');
   assert.equal(await page.locator('#fs-one').count(), 0);
   await page.click('#fs-cancel');
+
+  // 3 bis. même question pour le premier devis
+  await page.click('nav.nav button:has-text("Locations")');
+  await page.click('button:has-text("Nouvelle location")');
+  await page.waitForSelector('#d-client');
+  await page.fill('#d-client', 'Dup'); await page.click('#cl-res .pick-row:has-text("Dupont")');
+  await page.fill('#d-matsel', 'chaise'); await page.click('#mat-res .pick-row:has-text("Chaise")');
+  await page.waitForSelector('#lines .line');
+  await page.click('button:has-text("Créer le devis")');
+  await page.waitForSelector('#fs-in');
+  assert.match(await page.locator('#fs-root').innerText(), /devis/);
+  await page.fill('#fs-in', 'D-310');
+  assert.match(await page.locator('#fs-prev').innerText(), /D-311/);
+  await page.click('#fs-ok');
+  await page.waitForSelector('#fs-root', { state: 'detached' });
+  await page.waitForTimeout(1500);
+  const nd = async (pg) => (await pg.evaluate(() => fetch('/api/sync?since=0&limit=500', { credentials: 'same-origin' }).then((r) => r.json()))).docs.filter((d) => d.col === 'documents' && d.data.type === 'devis').map((d) => d.data.numero).sort();
+  assert.deepEqual(await nd(page), ['D-311']);
+  assert.deepEqual(await numeros(page), ['28-65', '28-66'], 'les factures ne bougent pas');
 
   // 4. « Commencer à 1 » dans un autre espace
   await page.evaluate(() => window.WEB.logout && window.WEB.logout());
